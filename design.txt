@@ -1,0 +1,27 @@
+基本类型
+
+int  string bool double
+
+1    hello  true  1.1
+
+
+数组类型
+
+[]type, [][]type,...
+
+[1,2,3] [[1,2],[3,4]]
+
+结构类型
+
+{field:type,field:type}
+
+{x:int,y:string}
+
+{x:1,y:hello}
+
+
+
+
+
+
+
