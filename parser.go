@@ -11,10 +11,29 @@ import (
 type Parser interface {
 	Parse(string) *Value
 	ValueType() int
+	GetGoType(string) string           //获取go类型
+	GenGoStruct(string, string) string //生成go结构体
 }
 
 type ValueParser struct {
 	valueType int
+}
+
+func (p ValueParser) GenGoStruct(s string, _ string) string {
+	return s
+}
+
+func (p ValueParser) GetGoType(_ string) string {
+	switch p.valueType {
+	case typeInt:
+		return "int"
+	case typeString:
+		return "string"
+	case typeBool:
+		return "bool"
+	default:
+		panic("error")
+	}
 }
 
 func (p ValueParser) ValueType() int {
@@ -55,6 +74,14 @@ func (p ValueParser) Parse(s string) *Value {
 
 type ArrayParser struct {
 	subParser Parser
+}
+
+func (p ArrayParser) GenGoStruct(s string, s1 string) string {
+	return p.subParser.GenGoStruct(s, s1)
+}
+
+func (p ArrayParser) GetGoType(s string) string {
+	return "[]" + p.subParser.GetGoType(s)
 }
 
 func (p ArrayParser) ValueType() int {
@@ -115,7 +142,27 @@ func (p ArrayParser) Parse(s string) *Value {
 }
 
 type StructParser struct {
-	fields map[string]Parser
+	structName string
+	fields     map[string]Parser
+}
+
+func (p StructParser) GetGoType(s string) string {
+	return s + strings.Title(p.structName)
+}
+
+func (p StructParser) GenGoStruct(s string, s1 string) string {
+	goStructType := p.GetGoType(strings.Title(s1))
+	//先遍历field生成所有嵌套类型
+	for k, v := range p.fields {
+		s = v.GenGoStruct(s, goStructType+strings.Title(k))
+	}
+
+	s += fmt.Sprintf("type %s struct {\n", goStructType)
+	for k, v := range p.fields {
+		s += fmt.Sprintf(" %s %s `json:\"%s\"`\n", strings.Title(k), v.GetGoType(goStructType+strings.Title(k)), k)
+	}
+	s += "}\n\n"
+	return s
 }
 
 func (p StructParser) ValueType() int {
@@ -227,9 +274,6 @@ func splitNameType(s string) (string, string, error) {
 }
 
 func readStructField(s string) (string, string, string, error) {
-	/* x:int,y:int[]
-	 * x:int,y:{xx:int,yy:int}
-	 */
 	leftCount := 0
 	for i := 0; i < len(s); i++ {
 		if s[i] == '{' {
@@ -247,6 +291,21 @@ func readStructField(s string) (string, string, string, error) {
 		return name, value, "", err
 	} else {
 		return "", "", "", errors.New("invaild define")
+	}
+}
+
+// 分离结构名和结构体定义
+func splitStructName(s string) (string, string, error) {
+	if idx := strings.Index(s, "{"); idx > 0 && idx < len(s) {
+		name := s[:idx]
+		typeStr := s[idx:]
+		if name == "" || !(typeStr[0] == '{' && typeStr[len(typeStr)-1] == '}') {
+			return "", "", errors.New("invaild define")
+		} else {
+			return name, typeStr, nil
+		}
+	} else {
+		return "", "", errors.New("invaild define")
 	}
 }
 
@@ -268,11 +327,14 @@ func MakeParser(s string) (Parser, error) {
 			} else {
 				return p, nil
 			}
-		} else if s[0] == '{' && s[len(s)-1] == '}' {
-			//结构体定义
+		} else {
+			structName, typeStr, err := splitStructName(s)
+			if err != nil {
+				return nil, err
+			}
+			s = typeStr
 			s = s[1 : len(s)-1] //去掉头尾括号
-			var err error
-			p := StructParser{fields: map[string]Parser{}}
+			p := StructParser{structName: structName, fields: map[string]Parser{}}
 			for s != "" {
 				var name string
 				var typeStr string
@@ -287,9 +349,6 @@ func MakeParser(s string) (Parser, error) {
 				}
 			}
 			return p, nil
-
-		} else {
-			return nil, errors.New("invaild type define")
 		}
 	}
 }

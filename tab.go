@@ -153,7 +153,7 @@ func (v *Value) ToJsonString(s string) string {
 }
 
 func main() {
-	{
+	/*{
 
 		p := ArrayParser{
 			subParser: ValueParser{
@@ -288,7 +288,7 @@ func main() {
 	}
 
 	{
-		if p, err := MakeParser("{x:int,y:int}"); err == nil {
+		if p, err := MakeParser("test{x:int,y:int}"); err == nil {
 			v := p.Parse("{x:1,y:2}")
 			fmt.Println(v.ToString(""))
 		} else {
@@ -297,7 +297,7 @@ func main() {
 	}
 
 	{
-		if p, err := MakeParser("{x:int,y:int[]}"); err == nil {
+		if p, err := MakeParser("test{x:int,y:int[]}"); err == nil {
 			v := p.Parse("{x:1,y:[1,2,3]}")
 			fmt.Println(v.ToString(""))
 		} else {
@@ -306,7 +306,7 @@ func main() {
 	}
 
 	{
-		if p, err := MakeParser("{x:string,y:{xx:int,yy:int[]}}"); err == nil {
+		if p, err := MakeParser("{x:string,y:test{xx:int,yy:int[]}}"); err == nil {
 			v := p.Parse("{x:1,y:{xx:2,yy:[1,2]}}")
 			fmt.Println(v.ToLuaString(""))
 			fmt.Println(v.ToJsonString(""))
@@ -316,10 +316,37 @@ func main() {
 	}
 
 	{
-		if p, err := MakeParser("{x:int,y:int}[]"); err == nil {
+		if p, err := MakeParser("test{x:int,y:int}[]"); err == nil {
 			v := p.Parse("[{x:1,y:11},{x:2,y:22}]")
 			fmt.Println(v.ToLuaString(""))
 			fmt.Println(v.ToJsonString(""))
+
+			fmt.Println(p.(ArrayParser).subParser.(StructParser).structName)
+
+		} else {
+			fmt.Println(err)
+		}
+	}*/
+
+	/*{
+		if p, err := MakeParser("test{x:int,y:int}"); err == nil {
+			fmt.Println(p.(StructParser).GenGoStruct("", "build"))
+		} else {
+			fmt.Println(err)
+		}
+	}
+
+	{
+		if p, err := MakeParser("test{x:int,y:int}[][]"); err == nil {
+			fmt.Println(p.GetGoType(""))
+		} else {
+			fmt.Println(err)
+		}
+	}*/
+
+	{
+		if p, err := MakeParser("test{x:int,y:nest{x:int,y:int}}"); err == nil {
+			fmt.Println(p.(StructParser).GenGoStruct("", "build"))
 		} else {
 			fmt.Println(err)
 		}
