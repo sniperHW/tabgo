@@ -252,10 +252,10 @@ func readStructField(s string) (string, string, string, error) {
 
 // 分离结构名和结构体定义
 func splitStructName(s string) (string, string, error) {
-	if idx := strings.Index(s, "{"); idx > 0 && idx < len(s) {
+	if idx := strings.Index(s, "{"); idx >= 0 && idx < len(s) {
 		name := s[:idx]
 		typeStr := s[idx:]
-		if name == "" || !(typeStr[0] == '{' && typeStr[len(typeStr)-1] == '}') {
+		if !(typeStr[0] == '{' && typeStr[len(typeStr)-1] == '}') {
 			return "", "", errors.New("invaild define")
 		} else {
 			return name, typeStr, nil

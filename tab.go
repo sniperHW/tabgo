@@ -261,7 +261,7 @@ func main() {
 	}*/
 
 	{
-		if p, err := MakeParser("test{x:int,y:nest{x:int,y:int}}"); err == nil {
+		if p, err := MakeParser("test{x:int,y:{x:int,y:int}}"); err == nil {
 			fmt.Println(p.(StructParser).GenGoStruct("", "build"))
 		} else {
 			fmt.Println(err)
