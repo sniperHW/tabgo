@@ -3,9 +3,18 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 	"text/template"
 )
+
+func title(s string) string {
+	if len(s) > 0 && s[0] >= 'a' && s[0] <= 'z' {
+		b := []byte(s)
+		b[0] -= ('a' - 'A')
+		return string(b)
+	} else {
+		return s
+	}
+}
 
 func (p ValueParser) GenGoStruct(s string, _ string) string {
 	return s
@@ -19,6 +28,8 @@ func (p ValueParser) GetGoType(_ string) string {
 		return "string"
 	case typeBool:
 		return "bool"
+	case typeFloat:
+		return "float64"
 	default:
 		panic("error")
 	}
@@ -33,22 +44,22 @@ func (p ArrayParser) GetGoType(s string) string {
 }
 
 func (p StructParser) GetGoType(s string) string {
-	return s + strings.Title(p.structName)
+	return s
 }
 
 func (p StructParser) GenGoStruct(s string, s1 string) string {
-	goStructType := p.GetGoType(strings.Title(s1))
+	goStructType := p.GetGoType(title(s1))
 	//先遍历field生成所有嵌套类型
 	for k, v := range p.fields {
-		s = v.GenGoStruct(s, goStructType+strings.Title(k))
+		s = v.GenGoStruct(s, goStructType+title(k))
 	}
 
 	s += fmt.Sprintf("type %s struct {\n", goStructType)
 	for k, v := range p.fields {
 		if _, ok := v.(StructParser); ok {
-			s += fmt.Sprintf(" %s *%s `json:\"%s\"`\n", strings.Title(k), v.GetGoType(goStructType+strings.Title(k)), k)
+			s += fmt.Sprintf("\t%s *%s `json:\"%s\"`\n", title(k), v.GetGoType(goStructType+title(k)), k)
 		} else {
-			s += fmt.Sprintf(" %s %s `json:\"%s\"`\n", strings.Title(k), v.GetGoType(""), k)
+			s += fmt.Sprintf("\t%s %s `json:\"%s\"`\n", title(k), v.GetGoType(""), k)
 		}
 	}
 	s += "}\n\n"
@@ -91,18 +102,18 @@ func (j *goStruct) outputGoJson(tmpl *template.Template, writePath string, rows 
 	//先生成所有结构体类型
 	for _, field := range table.fields {
 		if field.parser != nil {
-			j.str = field.parser.GenGoStruct(j.str, strings.Title(table.name)+strings.Title(field.name))
+			j.str = field.parser.GenGoStruct(j.str, title(table.name)+title(field.name))
 		}
 	}
 
-	j.str += fmt.Sprintf("type %s struct {\n", strings.Title(table.name))
+	j.str += fmt.Sprintf("type %s struct {\n", title(table.name))
 	for _, field := range table.fields {
 		if field.parser != nil {
 			if _, ok := field.parser.(StructParser); ok {
-				prefix := strings.Title(table.name) + strings.Title(field.name)
-				j.str += fmt.Sprintf(" %s *%s `json:\"%s\"` \n", strings.Title(field.name), field.parser.GetGoType(prefix), field.name)
+				prefix := title(table.name) + title(field.name)
+				j.str += fmt.Sprintf("\t%s *%s `json:\"%s\"` \n", title(field.name), field.parser.GetGoType(prefix), field.name)
 			} else {
-				j.str += fmt.Sprintf(" %s %s `json:\"%s\"` \n", strings.Title(field.name), field.parser.GetGoType(""), field.name)
+				j.str += fmt.Sprintf("\t%s %s `json:\"%s\"` \n", title(field.name), field.parser.GetGoType(""), field.name)
 			}
 		}
 	}

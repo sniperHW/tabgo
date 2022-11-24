@@ -46,6 +46,16 @@ func (p ValueParser) Parse(s string) (*Value, error) {
 			}
 			v.value = vv
 		}
+	case typeFloat:
+		if s == "" {
+			v.value = 0.0
+		} else {
+			vv, err := strconv.ParseFloat(s, 64)
+			if err != nil {
+				return nil, fmt.Errorf("err:%v str:%s", err, s)
+			}
+			v.value = vv
+		}
 	case typeString:
 		v.value = s
 	default:
@@ -124,8 +134,8 @@ func (p ArrayParser) Parse(s string) (*Value, error) {
 }
 
 type StructParser struct {
-	structName string
-	fields     map[string]Parser
+	//structName string
+	fields map[string]Parser
 }
 
 func (p StructParser) ValueType() int {
@@ -273,21 +283,6 @@ func readStructField(s string) (string, string, string, error) {
 	}
 }
 
-// 分离结构名和结构体定义
-func splitStructName(s string) (string, string, error) {
-	if idx := strings.Index(s, "{"); idx >= 0 && idx < len(s) {
-		name := s[:idx]
-		typeStr := s[idx:]
-		if !(typeStr[0] == '{' && typeStr[len(typeStr)-1] == '}') {
-			return "", "", errors.New("invaild define")
-		} else {
-			return name, typeStr, nil
-		}
-	} else {
-		return "", "", errors.New("invaild define")
-	}
-}
-
 func MakeParser(s string) (Parser, error) {
 	switch s {
 	case "int":
@@ -306,17 +301,13 @@ func MakeParser(s string) (Parser, error) {
 			} else {
 				return p, nil
 			}
-		} else {
-			structName, typeStr, err := splitStructName(s)
-			if err != nil {
-				return nil, err
-			}
-			s = typeStr
+		} else if len(s) > 2 && s[0] == '{' && s[len(s)-1] == '}' {
 			s = s[1 : len(s)-1] //去掉头尾括号
-			p := StructParser{structName: structName, fields: map[string]Parser{}}
+			p := StructParser{fields: map[string]Parser{}}
 			for s != "" {
 				var name string
 				var typeStr string
+				var err error
 				if name, typeStr, s, err = readStructField(s); err != nil {
 					return nil, err
 				} else {
@@ -328,6 +319,8 @@ func MakeParser(s string) (Parser, error) {
 				}
 			}
 			return p, nil
+		} else {
+			return nil, fmt.Errorf("invaild type define:%s", s)
 		}
 	}
 }

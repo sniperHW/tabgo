@@ -17,8 +17,9 @@ const (
 	typeInt    = 1
 	typeString = 2
 	typeBool   = 3
-	typeArray  = 4
-	typeStruct = 5
+	typeFloat  = 4
+	typeArray  = 5
+	typeStruct = 6
 )
 
 type Array struct {
@@ -39,207 +40,6 @@ type Value struct {
 	value     interface{}
 }
 
-func test() {
-	/*{
-
-		p := ArrayParser{
-			subParser: ValueParser{
-				valueType: typeInt,
-			},
-		}
-
-		v := p.Parse("")
-
-		fmt.Println(v.ToString(""))
-
-	}
-
-	{
-
-		p := ArrayParser{
-			subParser: ValueParser{
-				valueType: typeInt,
-			},
-		}
-
-		v := p.Parse("[]")
-
-		fmt.Println(v.ToString(""))
-
-	}
-
-	{
-
-		p := ArrayParser{
-			subParser: ValueParser{
-				valueType: typeInt,
-			},
-		}
-
-		v := p.Parse("[1,2,3]")
-
-		fmt.Println(v.ToString(""))
-
-	}
-
-	{
-
-		p := ArrayParser{
-			subParser: ArrayParser{
-				subParser: ValueParser{
-					valueType: typeInt,
-				},
-			},
-		}
-
-		v := p.Parse("[[1,2,3],[4,5,6]]")
-
-		fmt.Println(v.ToString(""))
-
-	}
-
-	{
-		p := StructParser{
-			fields: map[string]Parser{},
-		}
-
-		p.fields["x"] = ValueParser{
-			valueType: typeInt,
-		}
-
-		p.fields["y"] = ValueParser{
-			valueType: typeString,
-		}
-
-		v := p.Parse("{x:1,y:hello}")
-		fmt.Println(v.ToString(""))
-	}
-
-	{
-		p := StructParser{
-			fields: map[string]Parser{},
-		}
-
-		p.fields["x"] = ValueParser{
-			valueType: typeInt,
-		}
-
-		p.fields["y"] = ArrayParser{
-			subParser: ArrayParser{
-				subParser: ValueParser{valueType: typeInt},
-			},
-		}
-
-		v := p.Parse("{x:1,y:[[1,2],[3,4]]}")
-		fmt.Println(v.ToString(""))
-	}
-
-	{
-
-		p := StructParser{
-			fields: map[string]Parser{},
-		}
-
-		p.fields["x"] = ValueParser{
-			valueType: typeInt,
-		}
-
-		nest := StructParser{
-			fields: map[string]Parser{},
-		}
-
-		nest.fields["nestX"] = ValueParser{
-			valueType: typeInt,
-		}
-
-		nest.fields["nestY"] = ArrayParser{
-			subParser: ArrayParser{
-				subParser: ValueParser{valueType: typeInt},
-			},
-		}
-
-		p.fields["y"] = nest
-
-		v := p.Parse("{x:1,y:{nestX:100,nestY:[[1,2],[3,4]]}}")
-		fmt.Println(v.ToString(""))
-
-	}
-
-	{
-		if p, err := MakeParser("int[][]"); err == nil {
-			v := p.Parse("[[1,2],[3,4]]")
-			fmt.Println(v.ToString(""))
-		} else {
-			fmt.Println(err)
-		}
-	}
-
-	{
-		if p, err := MakeParser("test{x:int,y:int}"); err == nil {
-			v := p.Parse("{x:1,y:2}")
-			fmt.Println(v.ToString(""))
-		} else {
-			fmt.Println(err)
-		}
-	}
-
-	{
-		if p, err := MakeParser("test{x:int,y:int[]}"); err == nil {
-			v := p.Parse("{x:1,y:[1,2,3]}")
-			fmt.Println(v.ToString(""))
-		} else {
-			fmt.Println(err)
-		}
-	}
-
-	{
-		if p, err := MakeParser("{x:string,y:test{xx:int,yy:int[]}}"); err == nil {
-			v := p.Parse("{x:1,y:{xx:2,yy:[1,2]}}")
-			fmt.Println(v.ToLuaString(""))
-			fmt.Println(v.ToJsonString(""))
-		} else {
-			fmt.Println(err)
-		}
-	}
-
-	{
-		if p, err := MakeParser("test{x:int,y:int}[]"); err == nil {
-			v := p.Parse("[{x:1,y:11},{x:2,y:22}]")
-			fmt.Println(v.ToLuaString(""))
-			fmt.Println(v.ToJsonString(""))
-
-			fmt.Println(p.(ArrayParser).subParser.(StructParser).structName)
-
-		} else {
-			fmt.Println(err)
-		}
-	}*/
-
-	/*{
-		if p, err := MakeParser("test{x:int,y:int}"); err == nil {
-			fmt.Println(p.(StructParser).GenGoStruct("", "build"))
-		} else {
-			fmt.Println(err)
-		}
-	}
-
-	{
-		if p, err := MakeParser("test{x:int,y:int}[][]"); err == nil {
-			fmt.Println(p.GetGoType(""))
-		} else {
-			fmt.Println(err)
-		}
-	}*/
-
-	/*{
-		if p, err := MakeParser("test{x:int,y:{x:int,y:int}}"); err == nil {
-			fmt.Println(p.(StructParser).GenGoStruct("", "build"))
-		} else {
-			fmt.Println(err)
-		}
-	}*/
-}
-
 type Column struct {
 	name   string
 	parser Parser
@@ -258,6 +58,12 @@ type Walker struct {
 	funcOk     func(string)
 }
 
+const NamesRow = 0              //名字定义所在的行
+const TypesRow = 1              //类型定义所在行
+const DatasRow = 3              //数据起始行
+const IdName = "id"             //索引列的名字
+const Annotation = "annotation" //注释列的名字，对注释列不做任何处理
+
 func (w *Walker) walk() {
 	var wait sync.WaitGroup
 	if err := filepath.Walk(w.loadPath, func(filePath string, f os.FileInfo, _ error) error {
@@ -269,10 +75,8 @@ func (w *Walker) walk() {
 					wait.Done()
 				}()
 				if strings.Contains(filename, ".xlsx") {
-					name := strings.TrimSuffix(filename, ".xlsx")
-
 					table := &Table{
-						name: name,
+						name: strings.TrimSuffix(filename, ".xlsx"),
 					}
 
 					xlsx, err := excelize.OpenFile(path.Join(w.loadPath, filename))
@@ -282,33 +86,30 @@ func (w *Walker) walk() {
 
 					rows := xlsx.GetRows(xlsx.GetSheetName(xlsx.GetActiveSheetIndex()))
 
-					names := rows[0]
-					types := rows[1]
-					if len(rows) < 4 {
+					names := rows[NamesRow]
+					types := rows[TypesRow]
+					if len(rows) <= DatasRow {
 						return
 					}
-					rows = rows[3:]
+					rows = rows[DatasRow:]
 
 					idIndex := -1
 
 					for i := 0; i < len(names); i++ {
-						if names[i] == "" {
+						switch names[i] {
+						case "":
+						case Annotation:
 							field := &Column{
 								name: names[i],
 							}
 							table.fields = append(table.fields, field)
-						} else if names[i] == "annotation" {
-							field := &Column{
-								name: names[i],
-							}
-							table.fields = append(table.fields, field)
-						} else {
-							if names[i] == "id" {
+						default:
+							if names[i] == IdName {
 								idIndex = i
 							}
 
 							if parser, err := MakeParser(types[i]); err != nil {
-								panic(fmt.Sprintf("MakeParserError:%v file:%s column:%s", err, filename, name[i]))
+								panic(fmt.Sprintf("MakeParserError:%v file:%v column:%v", err, filename, names[i]))
 							} else {
 								col := &Column{
 									name:   names[i],
