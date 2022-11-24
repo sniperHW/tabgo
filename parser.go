@@ -9,7 +9,7 @@ import (
 
 // 从字符串生成Value
 type Parser interface {
-	Parse(string) *Value
+	Parse(string) (*Value, error)
 	ValueType() int
 	GetGoType(string) string           //获取go类型
 	GenGoStruct(string, string) string //生成go结构体
@@ -23,7 +23,7 @@ func (p ValueParser) ValueType() int {
 	return p.valueType
 }
 
-func (p ValueParser) Parse(s string) *Value {
+func (p ValueParser) Parse(s string) (*Value, error) {
 	v := &Value{valueType: p.valueType}
 	switch p.valueType {
 	case typeInt:
@@ -32,7 +32,7 @@ func (p ValueParser) Parse(s string) *Value {
 		} else {
 			vv, err := strconv.ParseInt(s, 10, 64)
 			if err != nil {
-				panic(fmt.Sprintf("err:%v value:%s", err, s))
+				return nil, fmt.Errorf("err:%v str:%s", err, s)
 			}
 			v.value = vv
 		}
@@ -42,17 +42,17 @@ func (p ValueParser) Parse(s string) *Value {
 		} else {
 			vv, err := strconv.ParseBool(s)
 			if err != nil {
-				panic(fmt.Sprintf("err:%v value:%s", err, s))
+				return nil, fmt.Errorf("err:%v str:%s", err, s)
 			}
 			v.value = vv
 		}
 	case typeString:
 		v.value = s
 	default:
-		panic("invaild type")
+		return nil, fmt.Errorf("invaild type str:%s", s)
 	}
 
-	return v
+	return v, nil
 }
 
 type ArrayParser struct {
@@ -63,18 +63,18 @@ func (p ArrayParser) ValueType() int {
 	return typeArray
 }
 
-func (p ArrayParser) splitCompose(s string, bracket string) (ret []string) {
+func (p ArrayParser) splitCompose(s string, bracket string) (ret []string, err error) {
 	left := -1
 	for i := 0; i < len(s); i++ {
 		if s[i] == bracket[0] {
 			if left != -1 {
-				panic("error1")
+				return nil, fmt.Errorf("left bracket mismatch")
 			} else {
 				left = i
 			}
 		} else if s[i] == bracket[1] {
 			if left == -1 {
-				panic("error2")
+				return nil, fmt.Errorf("right bracket mismatch")
 			} else {
 				sub := s[left : i+1]
 				if sub != bracket {
@@ -84,36 +84,43 @@ func (p ArrayParser) splitCompose(s string, bracket string) (ret []string) {
 			}
 		}
 	}
-	return ret
+	return ret, nil
 }
 
-func (p ArrayParser) split(s string) (ret []string) {
+func (p ArrayParser) split(s string) (ret []string, err error) {
 	if s[0] != '[' || s[len(s)-1] != ']' {
 		panic("error0")
 	}
 	s = s[1 : len(s)-1] //去掉头尾括号
 	switch p.subParser.(type) {
 	case ArrayParser:
-		ret = p.splitCompose(s, "[]")
+		ret, err = p.splitCompose(s, "[]")
 	case StructParser:
-		ret = p.splitCompose(s, "{}")
+		ret, err = p.splitCompose(s, "{}")
 	default:
 		ret = strings.Split(s, ",")
 	}
-	return ret
+	return ret, err
 }
 
-func (p ArrayParser) Parse(s string) *Value {
+func (p ArrayParser) Parse(s string) (*Value, error) {
 	v := &Value{valueType: typeArray}
 	array := &Array{}
 	if !(s == "" || s == "[]") {
-		e := p.split(s)
-		for _, vv := range e {
-			array.value = append(array.value, p.subParser.Parse(vv))
+		if e, err := p.split(s); err != nil {
+			return nil, err
+		} else {
+			for _, vv := range e {
+				if value, err := p.subParser.Parse(vv); err != nil {
+					return nil, err
+				} else {
+					array.value = append(array.value, value)
+				}
+			}
 		}
 	}
 	v.value = array
-	return v
+	return v, nil
 }
 
 type StructParser struct {
@@ -132,18 +139,18 @@ func (p StructParser) readFieldName(s string) (string, string, error) {
 			o = i
 		} else if s[i] == ':' {
 			if o == -1 {
-				return "", "", errors.New("ErrReadFieldName")
+				return "", "", errors.New("ErrReadFieldName1")
 			} else {
 				return s[o:i], s[i+1:], nil
 			}
 		}
 	}
-	return "", "", errors.New("ErrReadFieldName")
+	return "", "", errors.New("ErrReadFieldName2")
 }
 
 func (p StructParser) readComposeFiledValue(s string, parser Parser, bracket string) (*Value, string, error) {
 	if s[0] != bracket[0] {
-		return nil, "", errors.New("ErrReadFieldValue1")
+		return nil, "", errors.New("left bracket mismatch")
 	}
 	i := 1
 	leftCount := 1
@@ -153,14 +160,22 @@ func (p StructParser) readComposeFiledValue(s string, parser Parser, bracket str
 		} else if s[i] == bracket[1] {
 			leftCount--
 		} else if s[i] == ',' && leftCount == 0 {
-			return parser.Parse(s[:i]), s[:i+1], nil
+			if v, err := parser.Parse(s[:i]); err != nil {
+				return nil, "", err
+			} else {
+				return v, s[i+1:], nil
+			}
 		}
 	}
 
 	if leftCount == 0 {
-		return parser.Parse(s[:i]), "", nil
+		if v, err := parser.Parse(s[:i]); err != nil {
+			return nil, "", err
+		} else {
+			return v, "", nil
+		}
 	} else {
-		return nil, "", errors.New("ErrReadFieldValue3")
+		return nil, "", errors.New("bracket mismatch")
 	}
 }
 
@@ -170,10 +185,18 @@ func (p StructParser) readFieldValue(s string, parser Parser) (*Value, string, e
 		i := 0
 		for ; i < len(s); i++ {
 			if s[i] == ',' {
-				return parser.Parse(s[:i]), s[i+1:], nil
+				if v, err := parser.Parse(s[:i]); err != nil {
+					return nil, "", err
+				} else {
+					return v, s[i+1:], nil
+				}
 			}
 		}
-		return parser.Parse(s[:i]), "", nil
+		if v, err := parser.Parse(s[:i]); err != nil {
+			return nil, "", err
+		} else {
+			return v, "", nil
+		}
 	case ArrayParser:
 		return p.readComposeFiledValue(s, parser, "[]")
 	case StructParser:
@@ -183,12 +206,12 @@ func (p StructParser) readFieldValue(s string, parser Parser) (*Value, string, e
 	}
 }
 
-func (p StructParser) Parse(s string) *Value {
+func (p StructParser) Parse(s string) (*Value, error) {
 	v := &Value{valueType: typeStruct}
 	st := &Struct{}
 	if !(s == "" || s == "{}") {
 		if s[0] != '{' || s[len(s)-1] != '}' {
-			panic("error0")
+			return nil, fmt.Errorf("invaild struct")
 		}
 		s = s[1 : len(s)-1] //去掉头尾括号
 		for s != "" {
@@ -198,16 +221,16 @@ func (p StructParser) Parse(s string) *Value {
 
 			name, s, err = p.readFieldName(s)
 			if err != nil {
-				panic(err)
+				return nil, err
 			}
 
 			if fieldParser, ok := p.fields[name]; !ok {
-				panic(fmt.Sprintf("invaild field:%s", name))
+				return nil, fmt.Errorf("invaild field:%s", name)
 			} else {
 
 				field, s, err = p.readFieldValue(s, fieldParser)
 				if err != nil {
-					panic(err)
+					return nil, err
 				}
 				st.fields = append(st.fields, &Field{
 					name:  name,
@@ -217,7 +240,7 @@ func (p StructParser) Parse(s string) *Value {
 		}
 	}
 	v.value = st
-	return v
+	return v, nil
 }
 
 func splitNameType(s string) (string, string, error) {

@@ -1,6 +1,17 @@
 package main
 
-import "fmt"
+import (
+	"flag"
+	"fmt"
+	"os"
+	"path"
+	"path/filepath"
+	"strings"
+	"sync"
+	"text/template"
+
+	"github.com/360EntSecGroup-Skylar/excelize"
+)
 
 const (
 	typeInt    = 1
@@ -14,42 +25,13 @@ type Array struct {
 	value []*Value
 }
 
-func (a *Array) ToString(s string) string {
-	s += "["
-	for i, vv := range a.value {
-		s = vv.ToString(s)
-		if i != len(a.value)-1 {
-			s += ","
-		}
-	}
-	s += "]"
-	return s
-}
-
 type Field struct {
 	name  string
 	value *Value
 }
 
-func (f *Field) ToString(s string) string {
-	s += (f.name + ":")
-	return f.value.ToString(s)
-}
-
 type Struct struct {
 	fields []*Field
-}
-
-func (ss *Struct) ToString(s string) string {
-	s += "{"
-	for i, vv := range ss.fields {
-		s = vv.ToString(s)
-		if i != len(ss.fields)-1 {
-			s += ","
-		}
-	}
-	s += "}"
-	return s
 }
 
 type Value struct {
@@ -57,18 +39,7 @@ type Value struct {
 	value     interface{}
 }
 
-func (v *Value) ToString(s string) string {
-	switch v.valueType {
-	case typeArray:
-		return v.value.(*Array).ToString(s)
-	case typeStruct:
-		return v.value.(*Struct).ToString(s)
-	default:
-		return s + fmt.Sprintf("%v", v.value)
-	}
-}
-
-func main() {
+func test() {
 	/*{
 
 		p := ArrayParser{
@@ -260,12 +231,155 @@ func main() {
 		}
 	}*/
 
-	{
+	/*{
 		if p, err := MakeParser("test{x:int,y:{x:int,y:int}}"); err == nil {
 			fmt.Println(p.(StructParser).GenGoStruct("", "build"))
 		} else {
 			fmt.Println(err)
 		}
+	}*/
+}
+
+type Column struct {
+	name   string
+	parser Parser
+}
+
+type Table struct {
+	name   string
+	fields []*Column
+}
+
+type Walker struct {
+	loadPath   string
+	writePath  string
+	tmpl       *template.Template
+	funcOutput func(tmpl *template.Template, writePath string, rows [][]string, tab *Table, idIdx int)
+	funcOk     func(string)
+}
+
+func (w *Walker) walk() {
+	var wait sync.WaitGroup
+	if err := filepath.Walk(w.loadPath, func(filePath string, f os.FileInfo, _ error) error {
+		if f != nil && !f.IsDir() {
+			wait.Add(1)
+			go func() {
+				filename := f.Name()
+				defer func() {
+					wait.Done()
+				}()
+				if strings.Contains(filename, ".xlsx") {
+					name := strings.TrimSuffix(filename, ".xlsx")
+
+					table := &Table{
+						name: name,
+					}
+
+					xlsx, err := excelize.OpenFile(path.Join(w.loadPath, filename))
+					if err != nil {
+						panic(err)
+					}
+
+					rows := xlsx.GetRows(xlsx.GetSheetName(xlsx.GetActiveSheetIndex()))
+
+					names := rows[0]
+					types := rows[1]
+					if len(rows) < 4 {
+						return
+					}
+					rows = rows[3:]
+
+					idIndex := -1
+
+					for i := 0; i < len(names); i++ {
+						if names[i] == "" {
+							field := &Column{
+								name: names[i],
+							}
+							table.fields = append(table.fields, field)
+						} else if names[i] == "annotation" {
+							field := &Column{
+								name: names[i],
+							}
+							table.fields = append(table.fields, field)
+						} else {
+							if names[i] == "id" {
+								idIndex = i
+							}
+
+							if parser, err := MakeParser(types[i]); err != nil {
+								panic(fmt.Sprintf("MakeParserError:%v file:%s column:%s", err, filename, name[i]))
+							} else {
+								col := &Column{
+									name:   names[i],
+									parser: parser,
+								}
+								table.fields = append(table.fields, col)
+							}
+						}
+					}
+
+					if idIndex < 0 {
+						panic("not id field")
+					}
+
+					w.funcOutput(w.tmpl, w.writePath, rows, table, idIndex)
+				}
+			}()
+		}
+		return nil
+	}); err != nil {
+		panic(err)
+	}
+	wait.Wait()
+	if w.funcOk != nil {
+		w.funcOk(w.writePath)
+	}
+}
+
+func main() {
+	input := flag.String("input", "./table", "path of xlsx")
+	output := flag.String("output", "./lua", "path of output files")
+	gopackage := flag.String("package", "json", "package of go")
+	mode := flag.String("mode", "lua", "lua|json|go")
+	flag.Parse()
+
+	var fn func(tmpl *template.Template, writePath string, rows [][]string, tab *Table, idIdx int)
+	var walkOk func(writePath string)
+	var tmpl *template.Template
+	var err error
+
+	switch *mode {
+	case "lua":
+		fn = outputLua
+		tmpl, err = template.New("test").Parse(luaTemplate)
+		if err != nil {
+			panic(err)
+		}
+	case "json":
+		fn = outputJson
+		tmpl, err = template.New("test").Parse(jsonTemplate)
+		if err != nil {
+			panic(err)
+		}
+	case "go":
+		j := &goStruct{
+			gopackage: *gopackage,
+			str:       fmt.Sprintf("package %s\n\n", *gopackage),
+		}
+		fn = j.outputGoJson
+		walkOk = j.walkOk
+	default:
+		panic("unsupport mode")
 	}
 
+	w := &Walker{
+		loadPath:   *input,
+		writePath:  *output,
+		tmpl:       tmpl,
+		funcOutput: fn,
+		funcOk:     walkOk,
+	}
+
+	w.walk()
 }
