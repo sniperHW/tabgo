@@ -84,7 +84,7 @@ func (j *goStruct) walkOk(writePath string) {
 
 	f.WriteString(j.str)
 
-	fmt.Println(fmt.Sprintf("write %s ok", filename))
+	fmt.Printf("write %s ok\n", filename)
 }
 
 func (j *goStruct) outputGoJson(tmpl *template.Template, writePath string, rows [][]string, table *Table, idIndex int) {
