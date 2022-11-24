@@ -8,45 +8,43 @@ import (
 	"text/template"
 )
 
-func (a *Array) ToLuaString(s string) string {
-	s += "{"
+func (a *Array) ToLuaString(s *strings.Builder) {
+	s.WriteString("{")
 	for i, vv := range a.value {
-		s = vv.ToLuaString(s)
+		vv.ToLuaString(s)
 		if i != len(a.value)-1 {
-			s += ","
+			s.WriteString(",")
 		}
 	}
-	s += "}"
-	return s
+	s.WriteString("}")
 }
 
-func (f *Field) ToLuaString(s string) string {
-	s += (f.name + "=")
-	return f.value.ToLuaString(s)
+func (f *Field) ToLuaString(s *strings.Builder) {
+	s.WriteString(f.name + "=")
+	f.value.ToLuaString(s)
 }
 
-func (ss *Struct) ToLuaString(s string) string {
-	s += "{"
+func (ss *Struct) ToLuaString(s *strings.Builder) {
+	s.WriteString("{")
 	for i, vv := range ss.fields {
-		s = vv.ToLuaString(s)
+		vv.ToLuaString(s)
 		if i != len(ss.fields)-1 {
-			s += ","
+			s.WriteString(",")
 		}
 	}
-	s += "}"
-	return s
+	s.WriteString("}")
 }
 
-func (v *Value) ToLuaString(s string) string {
+func (v *Value) ToLuaString(s *strings.Builder) {
 	switch v.valueType {
 	case typeArray:
-		return v.value.(*Array).ToLuaString(s)
+		v.value.(*Array).ToLuaString(s)
 	case typeStruct:
-		return v.value.(*Struct).ToLuaString(s)
+		v.value.(*Struct).ToLuaString(s)
 	case typeString:
-		return s + fmt.Sprintf("\"%v\"", v.value)
+		s.WriteString(fmt.Sprintf("\"%v\"", v.value))
 	default:
-		return s + fmt.Sprintf("%v", v.value)
+		s.WriteString(fmt.Sprintf("%v", v.value))
 	}
 }
 
@@ -64,10 +62,15 @@ return {{.TableName}}
 `
 
 func outputLua(tmpl *template.Template, writePath string, rows [][]string, table *Table, idIndex int) {
-	rowsStr := []string{}
+	var builder strings.Builder
+	rr := 0
 	for rowNum, row := range rows {
 		if row[idIndex] != "" {
-			fieldsStr := []string{}
+			if rr > 0 {
+				builder.WriteString(",\n")
+			}
+			builder.WriteString(fmt.Sprintf("	[%v]={", row[0]))
+			cc := 0
 			for i, field := range table.fields {
 				if field.parser != nil {
 					if v, err := field.parser.Parse(row[i]); err != nil {
@@ -76,11 +79,19 @@ func outputLua(tmpl *template.Template, writePath string, rows [][]string, table
 						if v.valueType == typeStruct && len(v.value.(*Struct).fields) == 0 {
 							continue
 						}
-						fieldsStr = append(fieldsStr, v.ToLuaString(fmt.Sprintf("%s=", field.name)))
+						if cc > 0 {
+							builder.WriteString(",")
+						}
+						builder.WriteString(fmt.Sprintf("%s=", field.name))
+						v.ToJsonString(&builder)
+						cc++
+
 					}
 				}
 			}
-			rowsStr = append(rowsStr, fmt.Sprintf("	[%v]={%s}", row[0], strings.Join(fieldsStr, ",")))
+
+			builder.WriteString("}")
+			rr++
 		}
 	}
 
@@ -104,7 +115,7 @@ func outputLua(tmpl *template.Template, writePath string, rows [][]string, table
 		panic(err)
 	}
 
-	err = tmpl.Execute(f, lua{table.name, strings.Join(rowsStr, ",\n")})
+	err = tmpl.Execute(f, lua{table.name, builder.String()})
 	if err != nil {
 		panic(err)
 	} else {

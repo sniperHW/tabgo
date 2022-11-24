@@ -341,7 +341,7 @@ func main() {
 	input := flag.String("input", "./table", "path of xlsx")
 	output := flag.String("output", "./lua", "path of output files")
 	gopackage := flag.String("package", "json", "package of go")
-	mode := flag.String("mode", "lua", "lua|json|go")
+	mode := flag.String("mode", "json", "lua|json|go")
 	flag.Parse()
 
 	var fn func(tmpl *template.Template, writePath string, rows [][]string, tab *Table, idIdx int)

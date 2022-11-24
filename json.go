@@ -8,45 +8,43 @@ import (
 	"text/template"
 )
 
-func (a *Array) ToJsonString(s string) string {
-	s += "["
+func (a *Array) ToJsonString(s *strings.Builder) {
+	s.WriteString("[")
 	for i, vv := range a.value {
-		s = vv.ToJsonString(s)
+		vv.ToJsonString(s)
 		if i != len(a.value)-1 {
-			s += ","
+			s.WriteString(",")
 		}
 	}
-	s += "]"
-	return s
+	s.WriteString("]")
 }
 
-func (f *Field) ToJsonString(s string) string {
-	s += fmt.Sprintf("\"%s\":", f.name)
-	return f.value.ToJsonString(s)
+func (f *Field) ToJsonString(s *strings.Builder) {
+	s.WriteString(fmt.Sprintf("\"%s\":", f.name))
+	f.value.ToJsonString(s)
 }
 
-func (ss *Struct) ToJsonString(s string) string {
-	s += "{"
+func (ss *Struct) ToJsonString(s *strings.Builder) {
+	s.WriteString("{")
 	for i, vv := range ss.fields {
-		s = vv.ToJsonString(s)
+		vv.ToJsonString(s)
 		if i != len(ss.fields)-1 {
-			s += ","
+			s.WriteString(",")
 		}
 	}
-	s += "}"
-	return s
+	s.WriteString("}")
 }
 
-func (v *Value) ToJsonString(s string) string {
+func (v *Value) ToJsonString(s *strings.Builder) {
 	switch v.valueType {
 	case typeArray:
-		return v.value.(*Array).ToJsonString(s)
+		v.value.(*Array).ToJsonString(s)
 	case typeStruct:
-		return v.value.(*Struct).ToJsonString(s)
+		v.value.(*Struct).ToJsonString(s)
 	case typeString:
-		return s + fmt.Sprintf("\"%v\"", v.value)
+		s.WriteString(fmt.Sprintf("\"%v\"", v.value))
 	default:
-		return s + fmt.Sprintf("%v", v.value)
+		s.WriteString(fmt.Sprintf("%v", v.value))
 	}
 }
 
@@ -61,10 +59,17 @@ var jsonTemplate string = `
 `
 
 func outputJson(tmpl *template.Template, writePath string, rows [][]string, table *Table, idIndex int) {
-	rowsStr := []string{}
+	var builder strings.Builder
+	rr := 0
 	for rowNum, row := range rows {
 		if row[idIndex] != "" {
-			fieldsStr := []string{}
+
+			if rr > 0 {
+				builder.WriteString(",\n")
+			}
+
+			builder.WriteString(fmt.Sprintf("	\"%v\":{", row[0]))
+			cc := 0
 			for i, field := range table.fields {
 				if field.parser != nil {
 					if v, err := field.parser.Parse(row[i]); err != nil {
@@ -73,11 +78,18 @@ func outputJson(tmpl *template.Template, writePath string, rows [][]string, tabl
 						if v.valueType == typeStruct && len(v.value.(*Struct).fields) == 0 {
 							continue
 						}
-						fieldsStr = append(fieldsStr, v.ToJsonString(fmt.Sprintf("\"%s\":", field.name)))
+						if cc > 0 {
+							builder.WriteString(",")
+						}
+						builder.WriteString(fmt.Sprintf("\"%s\":", field.name))
+						v.ToJsonString(&builder)
+						cc++
 					}
 				}
 			}
-			rowsStr = append(rowsStr, fmt.Sprintf("	\"%v\":{%s}", row[0], strings.Join(fieldsStr, ",")))
+
+			builder.WriteString("}")
+			rr++
 		}
 	}
 	filename := fmt.Sprintf("%s/%s.json", writePath, table.name)
@@ -100,7 +112,7 @@ func outputJson(tmpl *template.Template, writePath string, rows [][]string, tabl
 		panic(err)
 	}
 
-	err = tmpl.Execute(f, json{strings.Join(rowsStr, ",\n")})
+	err = tmpl.Execute(f, json{Data: builder.String()})
 	if err != nil {
 		panic(err)
 	} else {
