@@ -18,4 +18,5 @@ type Model struct {
 	Length int          `json:"length"`
 	Width  int          `json:"width"`
 	Struct *ModelStruct `json:"struct"`
+	Array  []int        `json:"array"`
 }

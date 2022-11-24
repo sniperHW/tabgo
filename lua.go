@@ -69,7 +69,7 @@ func outputLua(tmpl *template.Template, writePath string, rows [][]string, table
 			if rr > 0 {
 				builder.WriteString(",\n")
 			}
-			builder.WriteString(fmt.Sprintf("	[%v]={", row[0]))
+			builder.WriteString(fmt.Sprintf("\t[%v]={", row[0]))
 			cc := 0
 			for i, field := range table.fields {
 				if field.parser != nil {

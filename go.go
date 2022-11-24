@@ -36,11 +36,11 @@ func (p ValueParser) GetGoType(_ string) string {
 }
 
 func (p ArrayParser) GenGoStruct(s string, s1 string) string {
-	return p.subParser.GenGoStruct(s, s1)
+	return p.child.GenGoStruct(s, s1)
 }
 
 func (p ArrayParser) GetGoType(s string) string {
-	return "[]" + p.subParser.GetGoType(s)
+	return "[]" + p.child.GetGoType(s)
 }
 
 func (p StructParser) GetGoType(s string) string {
