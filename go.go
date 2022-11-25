@@ -98,7 +98,7 @@ func (j *goStruct) walkOk(writePath string) {
 	fmt.Printf("write %s ok\n", filename)
 }
 
-func (j *goStruct) outputGoJson(tmpl *template.Template, writePath string, rows [][]string, table *Table, idIndex int) {
+func (j *goStruct) outputGoJson(tmpl *template.Template, writePath string, colNames []string, rows [][]string, table *Table, idIndex int) {
 	//先生成所有结构体类型
 	for _, field := range table.fields {
 		if field.parser != nil {

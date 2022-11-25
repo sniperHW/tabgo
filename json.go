@@ -58,7 +58,7 @@ var jsonTemplate string = `
 }
 `
 
-func outputJson(tmpl *template.Template, writePath string, rows [][]string, table *Table, idIndex int) {
+func outputJson(tmpl *template.Template, writePath string, colNames []string, rows [][]string, table *Table, idIndex int) {
 	var builder strings.Builder
 	rr := 0
 	for rowNum, row := range rows {
@@ -73,7 +73,7 @@ func outputJson(tmpl *template.Template, writePath string, rows [][]string, tabl
 			for i, field := range table.fields {
 				if field.parser != nil {
 					if v, err := field.parser.Parse(row[i]); err != nil {
-						panic(fmt.Errorf("parse err:%v table:%s columm:%d row:%d", err, table.name, i, rowNum+3))
+						panic(fmt.Errorf("parse err:%v table:%s columm:%s row:%d str:%s", err, table.name, colNames[i], rowNum+DatasRow+1, row[i]))
 					} else {
 						if v.valueType == typeStruct && len(v.value.(*Struct).fields) == 0 {
 							continue
