@@ -66,20 +66,18 @@ func (p ArrayParser) splitCompose(s string, bracket string) (ret []string, err e
 	if s == "" {
 		return ret, nil
 	} else {
-		if s[0] != bracket[0] {
-			return nil, fmt.Errorf("ArrayParser.splitCompose value mismatch with type")
-		}
-
 		left := -1
 		for i := 0; i < len(s); i++ {
 			if s[i] == bracket[0] {
 				if left != -1 {
+					fmt.Println(s)
 					return nil, fmt.Errorf("ArrayParser.splitCompose left bracket mismatch")
 				} else {
 					left = i
 				}
 			} else if s[i] == bracket[1] {
 				if left == -1 {
+					fmt.Println(s)
 					return nil, fmt.Errorf("ArrayParser.splitCompose right bracket mismatch")
 				} else {
 					sub := s[left : i+1]
