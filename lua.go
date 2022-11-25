@@ -83,7 +83,7 @@ func outputLua(tmpl *template.Template, writePath string, colNames []string, typ
 							builder.WriteString(",")
 						}
 						builder.WriteString(fmt.Sprintf("%s=", field.name))
-						v.ToJsonString(&builder)
+						v.ToLuaString(&builder)
 						cc++
 
 					}
