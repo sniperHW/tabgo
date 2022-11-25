@@ -63,27 +63,35 @@ func (p ArrayParser) ValueType() int {
 }
 
 func (p ArrayParser) splitCompose(s string, bracket string) (ret []string, err error) {
-	left := -1
-	for i := 0; i < len(s); i++ {
-		if s[i] == bracket[0] {
-			if left != -1 {
-				return nil, fmt.Errorf("ArrayParser.splitCompose left bracket mismatch")
-			} else {
-				left = i
-			}
-		} else if s[i] == bracket[1] {
-			if left == -1 {
-				return nil, fmt.Errorf("ArrayParser.splitCompose right bracket mismatch")
-			} else {
-				sub := s[left : i+1]
-				if sub != bracket {
-					ret = append(ret, sub)
+	if s == "" {
+		return ret, nil
+	} else {
+		if s[0] != bracket[0] {
+			return nil, fmt.Errorf("ArrayParser.splitCompose value mismatch with type")
+		}
+
+		left := -1
+		for i := 0; i < len(s); i++ {
+			if s[i] == bracket[0] {
+				if left != -1 {
+					return nil, fmt.Errorf("ArrayParser.splitCompose left bracket mismatch")
+				} else {
+					left = i
 				}
-				left = -1
+			} else if s[i] == bracket[1] {
+				if left == -1 {
+					return nil, fmt.Errorf("ArrayParser.splitCompose right bracket mismatch")
+				} else {
+					sub := s[left : i+1]
+					if sub != bracket {
+						ret = append(ret, sub)
+					}
+					left = -1
+				}
 			}
 		}
+		return ret, nil
 	}
-	return ret, nil
 }
 
 func (p ArrayParser) split(s string) (ret []string, err error) {
@@ -145,7 +153,7 @@ func (p StructParser) readFieldName(s string) (string, string, error) {
 }
 
 func (p StructParser) readComposeFiledValue(s string, parser Parser, bracket string) (*Value, string, error) {
-	if s[0] != bracket[0] {
+	if s[0] != bracket[0] || s[len(s)-1] != bracket[1] {
 		return nil, "", errors.New("StructParser.readComposeFiledValue left bracket mismatch")
 	}
 	i := 1

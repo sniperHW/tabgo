@@ -54,7 +54,7 @@ type Walker struct {
 	loadPath   string
 	writePath  string
 	tmpl       *template.Template
-	funcOutput func(*template.Template, string, []string, [][]string, *Table, int)
+	funcOutput func(*template.Template, string, []string, []string, [][]string, *Table, int)
 	funcOk     func(string)
 	ignore     map[string]bool
 }
@@ -132,7 +132,7 @@ func (w *Walker) walk() {
 						panic("not id field")
 					}
 
-					w.funcOutput(w.tmpl, w.writePath, names, rows, table, idIndex)
+					w.funcOutput(w.tmpl, w.writePath, names, types, rows, table, idIndex)
 				}
 			}()
 		}
@@ -154,7 +154,7 @@ func main() {
 	serverOnly := flag.String("server", "false", "true|false")
 	flag.Parse()
 
-	var fn func(tmpl *template.Template, writePath string, colNames []string, rows [][]string, tab *Table, idIdx int)
+	var fn func(tmpl *template.Template, writePath string, colNames []string, types []string, rows [][]string, tab *Table, idIdx int)
 	var walkOk func(writePath string)
 	var tmpl *template.Template
 	var err error
