@@ -56,13 +56,26 @@ type Walker struct {
 	tmpl       *template.Template
 	funcOutput func(tmpl *template.Template, writePath string, rows [][]string, tab *Table, idIdx int)
 	funcOk     func(string)
+	ignore     map[string]bool
 }
 
-const NamesRow = 0              //名字定义所在的行
-const TypesRow = 1              //类型定义所在行
-const DatasRow = 3              //数据起始行
-const IdName = "id"             //索引列的名字
-const Annotation = "annotation" //注释列的名字，对注释列不做任何处理
+const NamesRow = 0  //名字定义所在的行
+const TypesRow = 1  //类型定义所在行
+const DatasRow = 3  //数据起始行
+const IdName = "id" //索引列的名字
+
+func (w *Walker) checkColumn(s string) (string, bool) {
+	v := strings.Split(s, ":")
+	if v[0] == "" {
+		//名字为空字符串
+		return "", false
+	} else if len(v) > 1 && w.ignore[v[1]] {
+		//标记在忽略列表中
+		return "", false
+	} else {
+		return v[0], true
+	}
+}
 
 func (w *Walker) walk() {
 	var wait sync.WaitGroup
@@ -96,27 +109,22 @@ func (w *Walker) walk() {
 					idIndex := -1
 
 					for i := 0; i < len(names); i++ {
-						switch names[i] {
-						case "":
-						case Annotation:
-							field := &Column{
-								name: names[i],
-							}
-							table.fields = append(table.fields, field)
-						default:
-							if names[i] == IdName {
+
+						if colName, ok := w.checkColumn(names[i]); ok {
+							if colName == IdName {
 								idIndex = i
 							}
-
 							if parser, err := MakeParser(types[i]); err != nil {
 								panic(fmt.Sprintf("MakeParserError:%v file:%v column:%v", err, filename, names[i]))
 							} else {
 								col := &Column{
-									name:   names[i],
+									name:   colName,
 									parser: parser,
 								}
 								table.fields = append(table.fields, col)
 							}
+						} else {
+							table.fields = append(table.fields, &Column{})
 						}
 					}
 
@@ -139,10 +147,11 @@ func (w *Walker) walk() {
 }
 
 func main() {
-	input := flag.String("input", "./table", "path of xlsx")
+	input := flag.String("input", "./excel", "path of xlsx")
 	output := flag.String("output", "./lua", "path of output files")
 	gopackage := flag.String("package", "json", "package of go")
 	mode := flag.String("mode", "json", "lua|json|go")
+	serverOnly := flag.String("server", "false", "true|false")
 	flag.Parse()
 
 	var fn func(tmpl *template.Template, writePath string, rows [][]string, tab *Table, idIdx int)
@@ -180,6 +189,12 @@ func main() {
 		tmpl:       tmpl,
 		funcOutput: fn,
 		funcOk:     walkOk,
+		ignore:     map[string]bool{"annotation": true},
+	}
+
+	if *serverOnly == "true" {
+		//打服务端表，将所有标记为client的字段加入忽略列表
+		w.ignore["client"] = true
 	}
 
 	w.walk()
