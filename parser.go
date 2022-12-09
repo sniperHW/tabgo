@@ -50,7 +50,6 @@ func (p ValueParser) Parse(s string) (*Value, error) {
 	default:
 		err = fmt.Errorf("invaild type str:%s", s)
 	}
-
 	return v, err
 }
 
@@ -67,28 +66,31 @@ func (p ArrayParser) splitCompose(s string, bracket string) (ret []string, err e
 		return ret, nil
 	} else {
 		left := -1
+		leftCount := 0
 		for i := 0; i < len(s); i++ {
 			if s[i] == bracket[0] {
-				if left != -1 {
-					fmt.Println(s)
-					return nil, fmt.Errorf("ArrayParser.splitCompose left bracket mismatch")
-				} else {
+				leftCount++
+				if leftCount == 1 {
 					left = i
 				}
 			} else if s[i] == bracket[1] {
-				if left == -1 {
-					fmt.Println(s)
-					return nil, fmt.Errorf("ArrayParser.splitCompose right bracket mismatch")
-				} else {
+				leftCount--
+				if leftCount < 0 {
+					return nil, fmt.Errorf("ArrayParser.splitCompose left bracket mismatch")
+				} else if leftCount == 0 {
 					sub := s[left : i+1]
 					if sub != bracket {
 						ret = append(ret, sub)
 					}
-					left = -1
 				}
 			}
 		}
-		return ret, nil
+
+		if leftCount != 0 {
+			return nil, fmt.Errorf("ArrayParser.splitCompose right bracket mismatch")
+		} else {
+			return ret, nil
+		}
 	}
 }
 
