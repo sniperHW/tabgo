@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -64,4 +65,38 @@ func TestParser(t *testing.T) {
 		v.ToJsonString(&b)
 		assert.Equal(t, b.String(), "[{\"x\":1,\"y\":[2,3,4]},{\"x\":2,\"y\":[22,23,24]}]")
 	}
+
+	p, _ = MakeParser("{x:int,y:string,z:int}")
+
+	{
+		b := strings.Builder{}
+		v, err := p.Parse("{x:1,y:\"hello\\\"\",z:10}")
+		if nil != err {
+			fmt.Println(err)
+		} else {
+			v.ToJsonString(&b)
+			fmt.Println(b.String())
+		}
+	}
+
+	p, _ = MakeParser("string[]")
+	{
+		v, err := p.Parse("[a,b,c]")
+		fmt.Println(v, err)
+	}
+
+	{
+		b := strings.Builder{}
+		v, _ := p.Parse("[\"a,b,c\"]")
+		v.ToJsonString(&b)
+		fmt.Println(b.String())
+	}
+
+	{
+		b := strings.Builder{}
+		v, _ := p.Parse("[\"a,b,c\\\"\",\"e,f,g\"]")
+		v.ToJsonString(&b)
+		fmt.Println(b.String())
+	}
+
 }

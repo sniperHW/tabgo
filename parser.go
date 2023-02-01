@@ -95,6 +95,7 @@ func (p ArrayParser) splitCompose(s string, bracket string) (ret []string, err e
 }
 
 func (p ArrayParser) split(s string) (ret []string, err error) {
+
 	if s[0] != '[' || s[len(s)-1] != ']' {
 		return ret, errors.New("ArrayParser.split bracket mismatch")
 	}
@@ -105,7 +106,40 @@ func (p ArrayParser) split(s string) (ret []string, err error) {
 	case StructParser:
 		ret, err = p.splitCompose(s, "{}")
 	default:
-		ret = strings.Split(s, ",")
+		if p.child.ValueType() == typeString {
+			left := false
+			//内嵌的string值必须用""包裹，如果内容包含"需要使用\转义
+			var ss strings.Builder
+			for i, v := range s {
+				if v == '"' {
+					if !left {
+						left = true
+						ss = strings.Builder{}
+					} else if s[i-1] != '\\' {
+						if i == len(s)-1 || s[i+1] == ',' {
+							ret = append(ret, ss.String())
+							left = false
+						} else {
+							return ret, errors.New("ArrayParser.split error1")
+						}
+					} else {
+						ss.WriteRune(v)
+					}
+				} else if left && !(v == '\\' && i < len(s)-1 && s[i+1] == '"') {
+					ss.WriteRune(v)
+				}
+			}
+
+			if left {
+				//没有匹配的右"
+				return ret, errors.New("ArrayParser.split error2")
+			} else if len(s) > 0 && len(ret) == 0 {
+				return ret, errors.New("ArrayParser.split error3")
+			}
+
+		} else {
+			ret = strings.Split(s, ",")
+		}
 	}
 	return ret, err
 }
@@ -185,19 +219,55 @@ func (p StructParser) readFieldValue(s string, parser Parser) (*Value, string, e
 	switch parser.(type) {
 	case ValueParser:
 		i := 0
-		for ; i < len(s); i++ {
-			if s[i] == ',' {
-				break
+		var value string
+		if parser.ValueType() == typeString {
+			left := false
+			//内嵌的string值必须用""包裹，如果内容包含"需要使用\转义
+			var ss strings.Builder
+			for k, v := range s {
+				if v == '"' {
+					if !left {
+						left = true
+						ss = strings.Builder{}
+					} else if s[k-1] != '\\' {
+						if k == len(s)-1 || s[k+1] == ',' {
+							value = ss.String()
+							i = k
+							break
+						} else {
+							return nil, "", errors.New("StructParser.readFieldValue error1")
+						}
+					} else {
+						ss.WriteRune(v)
+					}
+				} else if left && !(v == '\\' && i < len(s)-1 && s[k+1] == '"') {
+					ss.WriteRune(v)
+				}
 			}
+
+			if !left {
+				return nil, "", errors.New("StructParser.readFieldValue error2")
+			} else if i == 0 {
+				return nil, "", errors.New("StructParser.readFieldValue error3")
+			}
+
+		} else {
+			for ; i < len(s); i++ {
+				if s[i] == ',' {
+					break
+				}
+			}
+			value = s[:i]
 		}
 
-		if v, err := parser.Parse(s[:i]); err != nil {
+		if v, err := parser.Parse(value); err != nil {
 			return nil, "", err
 		} else if i == len(s) {
 			return v, "", nil
 		} else {
 			return v, s[i+1:], nil
 		}
+
 	case ArrayParser:
 		return p.readComposeFiledValue(s, parser, "[]")
 	case StructParser:
