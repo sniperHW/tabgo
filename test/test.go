@@ -13,9 +13,12 @@ type ModelStruct struct {
 type Model struct {
 	Id int `json:"id"` 
 	Name string `json:"name"` 
+	Icon string `json:"icon"` 
+	Model string `json:"model"` 
 	Length int `json:"length"` 
 	Width int `json:"width"` 
 	Struct *ModelStruct `json:"struct"` 
 	Array []int `json:"array"` 
+	Array2d [][]int `json:"array2d"` 
 }
 
