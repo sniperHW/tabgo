@@ -8,37 +8,75 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestParser(t *testing.T) {
-	p, _ := MakeParser("int[][]")
-
+func TestMakeParser(t *testing.T) {
 	{
-		_, err := p.Parse("[1,2],[3,4]") //正确形式[[1,2],[3,4]]
+		_, err := MakeParser(" int[][] ")
+		assert.Nil(t, err)
+	}
+	{
+		_, err := MakeParser("int[ ][]")
 		assert.NotNil(t, err)
+		fmt.Println(err)
+	}
+	{
+		_, err := MakeParser("int[] []")
+		assert.Nil(t, err)
 	}
 
 	{
-		b := strings.Builder{}
-		v, _ := p.Parse("[[1,2]]")
-		v.ToJsonString(&b)
-		assert.Equal(t, b.String(), "[[1,2]]")
+		_, err := MakeParser(" { x : int, y : int[] [] } ")
+		assert.Nil(t, err)
 	}
 
 	{
-		_, err := p.Parse("[[[1,2],[3,4]]]") //多了最外面一层[]
-		assert.NotNil(t, err)
+		_, err := MakeParser(`{ 
+								x : int , 
+								y : int[] [] 
+								} `)
+		assert.Nil(t, err)
 	}
+}
 
-	//结构嵌套数组
-	p, _ = MakeParser("{x:int,y:int[][]}")
+func TestParse(t *testing.T) {
 
 	{
-		b := strings.Builder{}
-		v, _ := p.Parse("{x:1,y:[[1,2],[3,4]]}")
-		v.ToJsonString(&b)
-		assert.Equal(t, b.String(), "{\"x\":1,\"y\":[[1,2],[3,4]]}")
+		p, _ := MakeParser(" int[][] ")
+
+		{
+			_, err := p.Parse(" [1,2],[3,4] ") //正确形式[[1,2],[3,4]]
+			fmt.Println(err)
+			assert.NotNil(t, err)
+		}
+
+		{
+			b := strings.Builder{}
+			v, _ := p.Parse(" [ [ 1 , 2 ] ] ")
+			v.ToJsonString(&b)
+			assert.Equal(t, b.String(), "[[1,2]]")
+		}
+
+		{
+			_, err := p.Parse("[[[1,2],[3,4]]]") //多了最外面一层[]
+			assert.NotNil(t, err)
+		}
+	}
+	{
+		//结构嵌套数组
+		p, _ := MakeParser("{x:int,y:int[][]}")
+
+		{
+			b := strings.Builder{}
+			v, _ := p.Parse(`{
+							x: 1 ,
+							y: [[1,2],[3,4]] 
+							}`)
+
+			v.ToJsonString(&b)
+			assert.Equal(t, b.String(), "{\"x\":1,\"y\":[[1,2],[3,4]]}")
+		}
 	}
 
-	p, _ = MakeParser("{x:int,y:{xx:int,yy:int}}")
+	p, _ := MakeParser("{x:int,y:{xx:int,yy:int}}")
 
 	//结构嵌套结构
 	{
@@ -70,7 +108,7 @@ func TestParser(t *testing.T) {
 
 	{
 		b := strings.Builder{}
-		v, err := p.Parse("{x:1,y:\"hello\\\"\",z:10}")
+		v, err := p.Parse("{x:1,y:  \"hello\\\"\"  ,z:10}")
 		if nil != err {
 			fmt.Println(err)
 		} else {
@@ -82,7 +120,7 @@ func TestParser(t *testing.T) {
 	p, _ = MakeParser("string[]")
 	{
 		v, err := p.Parse("[a,b,c]")
-		fmt.Println(v, err)
+		fmt.Println("p.Parse(\"[a,b,c]\")", v, err)
 	}
 
 	{
@@ -95,6 +133,13 @@ func TestParser(t *testing.T) {
 	{
 		b := strings.Builder{}
 		v, _ := p.Parse("[\"a,b,c\\\"\",\"e,f,g\"]")
+		v.ToJsonString(&b)
+		fmt.Println(b.String())
+	}
+
+	{
+		b := strings.Builder{}
+		v, _ := p.Parse("[ \"a\" , \"b\" ]")
 		v.ToJsonString(&b)
 		fmt.Println(b.String())
 	}

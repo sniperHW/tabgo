@@ -7,6 +7,47 @@ import (
 	"strings"
 )
 
+var filterToken []string = []string{
+	" ",
+	"\r",
+	"\n",
+	"\t",
+}
+
+var filterRune []rune = []rune{
+	' ',
+	'\r',
+	'\n',
+	'\t',
+}
+
+func isFilterRune(r rune) bool {
+	for _, v := range filterRune {
+		if r == v {
+			return true
+		}
+	}
+	return false
+}
+
+func trimLeft(s string) string {
+	for _, v := range filterToken {
+		s = strings.TrimLeft(s, v)
+	}
+	return s
+}
+
+func trimRight(s string) string {
+	for _, v := range filterToken {
+		s = strings.TrimRight(s, v)
+	}
+	return s
+}
+
+func trim(s string) string {
+	return trimLeft(trimRight(s))
+}
+
 // 从字符串生成Value
 type Parser interface {
 	Parse(string) (*Value, error)
@@ -31,18 +72,21 @@ func (p ValueParser) Parse(s string) (*Value, error) {
 		if s == "" {
 			v.value = 0
 		} else {
+			s = trim(s)
 			v.value, err = strconv.ParseInt(s, 10, 64)
 		}
 	case typeBool:
 		if s == "" {
 			v.value = false
 		} else {
+			s = trim(s)
 			v.value, err = strconv.ParseBool(s)
 		}
 	case typeFloat:
 		if s == "" {
 			v.value = 0.0
 		} else {
+			s = trim(s)
 			v.value, err = strconv.ParseFloat(s, 64)
 		}
 	case typeString:
@@ -68,12 +112,13 @@ func (p ArrayParser) splitCompose(s string, bracket string) (ret []string, err e
 		left := -1
 		leftCount := 0
 		for i := 0; i < len(s); i++ {
-			if s[i] == bracket[0] {
+			switch s[i] {
+			case bracket[0]:
 				leftCount++
 				if leftCount == 1 {
 					left = i
 				}
-			} else if s[i] == bracket[1] {
+			case bracket[1]:
 				leftCount--
 				if leftCount < 0 {
 					return nil, fmt.Errorf("ArrayParser.splitCompose left bracket mismatch")
@@ -95,7 +140,6 @@ func (p ArrayParser) splitCompose(s string, bracket string) (ret []string, err e
 }
 
 func (p ArrayParser) split(s string) (ret []string, err error) {
-
 	if s[0] != '[' || s[len(s)-1] != ']' {
 		return ret, errors.New("ArrayParser.split bracket mismatch")
 	}
@@ -110,18 +154,26 @@ func (p ArrayParser) split(s string) (ret []string, err error) {
 			left := false
 			//内嵌的string值必须用""包裹，如果内容包含"需要使用\转义
 			var ss strings.Builder
-			for i, v := range s {
+			for i := 0; i < len(s); i++ {
+				v := rune(s[i])
 				if v == '"' {
 					if !left {
 						left = true
 						ss = strings.Builder{}
 					} else if s[i-1] != '\\' {
-						if i == len(s)-1 || s[i+1] == ',' {
-							ret = append(ret, ss.String())
-							left = false
-						} else {
-							return ret, errors.New("ArrayParser.split error1")
+						if i != len(s)-1 {
+							i++
+							for ; i < len(s); i++ {
+								v = rune(s[i])
+								if v == ',' {
+									break
+								} else if !isFilterRune(v) {
+									return ret, errors.New("ArrayParser.split error1")
+								}
+							}
 						}
+						ret = append(ret, ss.String())
+						left = false
 					} else {
 						ss.WriteRune(v)
 					}
@@ -129,7 +181,6 @@ func (p ArrayParser) split(s string) (ret []string, err error) {
 					ss.WriteRune(v)
 				}
 			}
-
 			if left {
 				//没有匹配的右"
 				return ret, errors.New("ArrayParser.split error2")
@@ -146,6 +197,7 @@ func (p ArrayParser) split(s string) (ret []string, err error) {
 
 func (p ArrayParser) Parse(s string) (*Value, error) {
 	array := &Array{}
+	s = trim(s)
 	if !(s == "" || s == "[]") {
 		if e, err := p.split(s); err != nil {
 			return nil, err
@@ -179,7 +231,7 @@ func (p StructParser) readFieldName(s string) (string, string, error) {
 			if o == -1 {
 				return "", "", errors.New("ErrReadFieldName1")
 			} else {
-				return s[o:i], s[i+1:], nil
+				return trim(s[o:i]), trim(s[i+1:]), nil
 			}
 		}
 	}
@@ -187,6 +239,7 @@ func (p StructParser) readFieldName(s string) (string, string, error) {
 }
 
 func (p StructParser) readComposeFiledValue(s string, parser Parser, bracket string) (*Value, string, error) {
+	s = trim(s)
 	if s[0] != bracket[0] || s[len(s)-1] != bracket[1] {
 		return nil, "", errors.New("StructParser.readComposeFiledValue left bracket mismatch")
 	}
@@ -208,7 +261,7 @@ func (p StructParser) readComposeFiledValue(s string, parser Parser, bracket str
 		} else if i == len(s) {
 			return v, "", nil
 		} else {
-			return v, s[i+1:], nil
+			return v, trim(s[i+1:]), nil
 		}
 	} else {
 		return nil, "", errors.New("bracket mismatch")
@@ -230,13 +283,20 @@ func (p StructParser) readFieldValue(s string, parser Parser) (*Value, string, e
 						left = true
 						ss = strings.Builder{}
 					} else if s[k-1] != '\\' {
-						if k == len(s)-1 || s[k+1] == ',' {
-							value = ss.String()
-							i = k
-							break
-						} else {
-							return nil, "", errors.New("StructParser.readFieldValue error1")
+						if k != len(s)-1 {
+							k++
+							for ; k < len(s); k++ {
+								v = rune(s[k])
+								if v == ',' {
+									break
+								} else if !isFilterRune(v) {
+									return nil, "", errors.New("StructParser.readFieldValue error1")
+								}
+							}
 						}
+						value = ss.String()
+						i = k
+						break
 					} else {
 						ss.WriteRune(v)
 					}
@@ -278,6 +338,7 @@ func (p StructParser) readFieldValue(s string, parser Parser) (*Value, string, e
 }
 
 func (p StructParser) Parse(s string) (*Value, error) {
+	s = trim(s)
 	v := &Value{valueType: typeStruct}
 	st := &Struct{}
 	if !(s == "" || s == "{}") {
@@ -324,6 +385,7 @@ func splitNameType(s string) (string, string, error) {
 }
 
 func readStructField(s string) (string, string, string, error) {
+	s = trim(s)
 	leftCount := 0
 	for i := 0; i < len(s); i++ {
 		if s[i] == '{' {
@@ -348,6 +410,7 @@ func MakeParser(s string) (Parser, error) {
 	var name string
 	var typeStr string
 	var err error
+	s = trim(s)
 	switch s {
 	case "int":
 		return ValueParser{valueType: typeInt}, nil
