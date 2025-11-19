@@ -40,6 +40,25 @@ func TestMakeParser(t *testing.T) {
 func TestParse(t *testing.T) {
 
 	{
+		p, _ := MakeParser("{x:int,y:{x:int,y:int},array:int[]}")
+		v, err := p.Parse("{x:1,y:{x:2,y:3},array:[1,2,3,4]}") //正确形式[[1,2],[3,4]]
+		sb := strings.Builder{}
+		fmt.Println(err)
+		v.ToJsonString(&sb)
+		fmt.Println(sb.String())
+	}
+
+	{
+		p, err := MakeParser("{x:int,y:{x:int,y:int},array:{x:int,y:int}[]}")
+		fmt.Println(p, err)
+		v, err := p.Parse("{x:1,y:{x:2,y:3},array:[{x:1,y:2},{x:3,y:4}]}")
+		sb := strings.Builder{}
+		fmt.Println(err)
+		v.ToJsonString(&sb)
+		fmt.Println(sb.String())
+	}
+
+	{
 		p, _ := MakeParser(" int[][] ")
 
 		{

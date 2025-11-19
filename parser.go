@@ -240,7 +240,7 @@ func (p StructParser) readFieldName(s string) (string, string, error) {
 
 func (p StructParser) readComposeFiledValue(s string, parser Parser, bracket string) (*Value, string, error) {
 	s = trim(s)
-	if s[0] != bracket[0] || s[len(s)-1] != bracket[1] {
+	if s[0] != bracket[0] {
 		return nil, "", errors.New("StructParser.readComposeFiledValue left bracket mismatch")
 	}
 	i := 1

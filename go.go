@@ -44,7 +44,7 @@ func (p ArrayParser) GetGoType(s string) string {
 }
 
 func (p StructParser) GetGoType(s string) string {
-	return s
+	return "*" + s
 }
 
 func (p StructParser) GenGoStruct(s string, s1 string) string {
@@ -56,9 +56,17 @@ func (p StructParser) GenGoStruct(s string, s1 string) string {
 
 	s += fmt.Sprintf("type %s struct {\n", goStructType)
 	for k, v := range p.fields {
-		if _, ok := v.(StructParser); ok {
-			s += fmt.Sprintf("\t%s *%s `json:\"%s\"`\n", title(k), v.GetGoType(goStructType+title(k)), k)
-		} else {
+		switch v.(type) {
+		case StructParser:
+			s += fmt.Sprintf("\t%s %s `json:\"%s\"`\n", title(k), v.GetGoType(goStructType+title(k)), k)
+		case ArrayParser:
+			switch v.(ArrayParser).child.(type) {
+			case StructParser:
+				s += fmt.Sprintf("\t%s %s `json:\"%s\"`\n", title(k), v.GetGoType(goStructType+title(k)), k)
+			default:
+				s += fmt.Sprintf("\t%s %s `json:\"%s\"`\n", title(k), v.GetGoType(""), k)
+			}
+		default:
 			s += fmt.Sprintf("\t%s %s `json:\"%s\"`\n", title(k), v.GetGoType(""), k)
 		}
 	}
@@ -109,10 +117,19 @@ func (j *goStruct) outputGoJson(tmpl *template.Template, writePath string, colNa
 	j.str += fmt.Sprintf("type %s struct {\n", title(table.name))
 	for _, field := range table.fields {
 		if field.parser != nil {
-			if _, ok := field.parser.(StructParser); ok {
+			switch field.parser.(type) {
+			case StructParser:
 				prefix := title(table.name) + title(field.name)
-				j.str += fmt.Sprintf("\t%s *%s `json:\"%s\"` \n", title(field.name), field.parser.GetGoType(prefix), field.name)
-			} else {
+				j.str += fmt.Sprintf("\t%s %s `json:\"%s\"` \n", title(field.name), field.parser.GetGoType(prefix), field.name)
+			case ArrayParser:
+				switch field.parser.(ArrayParser).child.(type) {
+				case StructParser:
+					prefix := title(table.name) + title(field.name)
+					j.str += fmt.Sprintf("\t%s %s `json:\"%s\"` \n", title(field.name), field.parser.GetGoType(prefix), field.name)
+				default:
+					j.str += fmt.Sprintf("\t%s %s `json:\"%s\"` \n", title(field.name), field.parser.GetGoType(""), field.name)
+				}
+			default:
 				j.str += fmt.Sprintf("\t%s %s `json:\"%s\"` \n", title(field.name), field.parser.GetGoType(""), field.name)
 			}
 		}
