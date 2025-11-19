@@ -44,7 +44,7 @@ func (p ArrayParser) GetGoType(s string) string {
 }
 
 func (p StructParser) GetGoType(s string) string {
-	return "*" + s
+	return s
 }
 
 func (p StructParser) GenGoStruct(s string, s1 string) string {
@@ -58,11 +58,13 @@ func (p StructParser) GenGoStruct(s string, s1 string) string {
 	for k, v := range p.fields {
 		switch v.(type) {
 		case StructParser:
-			s += fmt.Sprintf("\t%s %s `json:\"%s\"`\n", title(k), v.GetGoType(goStructType+title(k)), k)
+			prefix := "*" + goStructType + title(k)
+			s += fmt.Sprintf("\t%s %s `json:\"%s\"`\n", title(k), v.GetGoType(prefix), k)
 		case ArrayParser:
 			switch v.(ArrayParser).child.(type) {
 			case StructParser:
-				s += fmt.Sprintf("\t%s %s `json:\"%s\"`\n", title(k), v.GetGoType(goStructType+title(k)), k)
+				prefix := "*" + goStructType + title(k)
+				s += fmt.Sprintf("\t%s %s `json:\"%s\"`\n", title(k), v.GetGoType(prefix), k)
 			default:
 				s += fmt.Sprintf("\t%s %s `json:\"%s\"`\n", title(k), v.GetGoType(""), k)
 			}
@@ -119,12 +121,12 @@ func (j *goStruct) outputGoJson(tmpl *template.Template, writePath string, colNa
 		if field.parser != nil {
 			switch field.parser.(type) {
 			case StructParser:
-				prefix := title(table.name) + title(field.name)
+				prefix := "*" + title(table.name) + title(field.name)
 				j.str += fmt.Sprintf("\t%s %s `json:\"%s\"` \n", title(field.name), field.parser.GetGoType(prefix), field.name)
 			case ArrayParser:
 				switch field.parser.(ArrayParser).child.(type) {
 				case StructParser:
-					prefix := title(table.name) + title(field.name)
+					prefix := "*" + title(table.name) + title(field.name)
 					j.str += fmt.Sprintf("\t%s %s `json:\"%s\"` \n", title(field.name), field.parser.GetGoType(prefix), field.name)
 				default:
 					j.str += fmt.Sprintf("\t%s %s `json:\"%s\"` \n", title(field.name), field.parser.GetGoType(""), field.name)
