@@ -5,74 +5,9 @@ import (
 	"os"
 	"strings"
 	"text/template"
+
+	"github.com/sniperHW/tabgo/parser"
 )
-
-func title(s string) string {
-	if len(s) > 0 && s[0] >= 'a' && s[0] <= 'z' {
-		b := []byte(s)
-		b[0] -= ('a' - 'A')
-		return string(b)
-	} else {
-		return s
-	}
-}
-
-func (p *ValueParser) GenGoStruct(s *strings.Builder, _ string) {
-}
-
-func (p *ValueParser) GetGoType() string {
-	switch p.valueType {
-	case typeInt:
-		return "int"
-	case typeString:
-		return "string"
-	case typeBool:
-		return "bool"
-	case typeFloat:
-		return "float64"
-	default:
-		panic("error")
-	}
-}
-
-func (p *ArrayParser) GenGoStruct(s *strings.Builder, s1 string) {
-	p.elements.GenGoStruct(s, s1)
-}
-
-func (p *ArrayParser) GetGoType() string {
-	return "[]" + p.elements.GetGoType()
-}
-
-func (p *StructParser) GetGoType() string {
-	return p.goType
-}
-
-func (p *StructParser) GenGoStruct(s *strings.Builder, s1 string) {
-	goStructType := title(s1)
-	p.goType = "*" + goStructType
-	//先遍历field生成所有嵌套类型
-	for k, v := range p.fields {
-		v.GenGoStruct(s, goStructType+title(k))
-	}
-
-	fmt.Fprintf(s, "type %s struct {\n", goStructType)
-	for k, v := range p.fields {
-		switch v.(type) {
-		case *StructParser:
-			fmt.Fprintf(s, "\t%s %s `json:\"%s\"`\n", title(k), v.GetGoType(), k)
-		case *ArrayParser:
-			switch v.(*ArrayParser).elements.(type) {
-			case *StructParser:
-				fmt.Fprintf(s, "\t%s %s `json:\"%s\"`\n", title(k), v.GetGoType(), k)
-			default:
-				fmt.Fprintf(s, "\t%s %s `json:\"%s\"`\n", title(k), v.GetGoType(), k)
-			}
-		default:
-			fmt.Fprintf(s, "\t%s %s `json:\"%s\"`\n", title(k), v.GetGoType(), k)
-		}
-	}
-	s.WriteString("}\n\n")
-}
 
 type goStruct struct {
 	gopackage string
@@ -107,30 +42,14 @@ func (j *goStruct) walkOk(writePath string) {
 }
 
 func (j *goStruct) outputGoJson(tmpl *template.Template, writePath string, colNames []string, types []string, rows [][]string, table *Table, idIndex int) {
-	//先生成所有结构体类型
-	for _, field := range table.fields {
-		if field.parser != nil {
-			field.parser.GenGoStruct(&j.str, title(table.name)+title(field.name))
-		}
+	fields := []string{}
+	for i := 0; i < len(colNames); i++ {
+		fields = append(fields, fmt.Sprintf("%s:%s", strings.Split(colNames[i], ":")[0], types[i]))
 	}
-
-	fmt.Fprintf(&j.str, "type %s struct {\n", title(table.name))
-	for _, field := range table.fields {
-		if field.parser != nil {
-			switch field.parser.(type) {
-			case *StructParser:
-				fmt.Fprintf(&j.str, "\t%s %s `json:\"%s\"` \n", title(field.name), field.parser.GetGoType(), field.name)
-			case *ArrayParser:
-				switch field.parser.(*ArrayParser).elements.(type) {
-				case *StructParser:
-					fmt.Fprintf(&j.str, "\t%s %s `json:\"%s\"` \n", title(field.name), field.parser.GetGoType(), field.name)
-				default:
-					fmt.Fprintf(&j.str, "\t%s %s `json:\"%s\"` \n", title(field.name), field.parser.GetGoType(), field.name)
-				}
-			default:
-				fmt.Fprintf(&j.str, "\t%s %s `json:\"%s\"` \n", title(field.name), field.parser.GetGoType(), field.name)
-			}
-		}
+	str := "{" + strings.Join(fields, ",") + "}"
+	p, err := parser.MakeParser(str)
+	if err != nil {
+		panic(err)
 	}
-	j.str.WriteString("}\n\n")
+	j.str.WriteString(p.GenGoDefine(strings.Title(table.name)))
 }

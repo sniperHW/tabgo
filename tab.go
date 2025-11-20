@@ -11,6 +11,7 @@ import (
 	"text/template"
 
 	"github.com/360EntSecGroup-Skylar/excelize"
+	"github.com/sniperHW/tabgo/parser"
 )
 
 const (
@@ -23,12 +24,12 @@ const (
 )
 
 type Array struct {
-	value []*Value
+	value []*parser.Value
 }
 
 type Field struct {
 	name  string
-	value *Value
+	value *parser.Value
 }
 
 type Struct struct {
@@ -42,7 +43,7 @@ type Value struct {
 
 type Column struct {
 	name   string
-	parser Parser
+	parser *parser.Parser
 }
 
 type Table struct {
@@ -114,7 +115,7 @@ func (w *Walker) walk() {
 							if colName == IdName {
 								idIndex = i
 							}
-							if parser, err := MakeParser(types[i]); err != nil {
+							if parser, err := parser.MakeParser(types[i]); err != nil {
 								panic(fmt.Sprintf("MakeParserError:%v file:%v column:%v", err, filename, names[i]))
 							} else {
 								col := &Column{

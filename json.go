@@ -8,46 +8,6 @@ import (
 	"text/template"
 )
 
-func (a *Array) ToJsonString(s *strings.Builder) {
-	s.WriteString("[")
-	for i, vv := range a.value {
-		vv.ToJsonString(s)
-		if i != len(a.value)-1 {
-			s.WriteString(",")
-		}
-	}
-	s.WriteString("]")
-}
-
-func (f *Field) ToJsonString(s *strings.Builder) {
-	fmt.Fprintf(s, "\"%s\":", f.name)
-	f.value.ToJsonString(s)
-}
-
-func (ss *Struct) ToJsonString(s *strings.Builder) {
-	s.WriteString("{")
-	for i, vv := range ss.fields {
-		vv.ToJsonString(s)
-		if i != len(ss.fields)-1 {
-			s.WriteString(",")
-		}
-	}
-	s.WriteString("}")
-}
-
-func (v *Value) ToJsonString(s *strings.Builder) {
-	switch v.valueType {
-	case typeArray:
-		v.value.(*Array).ToJsonString(s)
-	case typeStruct:
-		v.value.(*Struct).ToJsonString(s)
-	case typeString:
-		fmt.Fprintf(s, "\"%v\"", v.value)
-	default:
-		fmt.Fprintf(s, "%v", v.value)
-	}
-}
-
 type json struct {
 	Data string
 }
@@ -63,7 +23,6 @@ func outputJson(tmpl *template.Template, writePath string, colNames []string, ty
 	rr := 0
 	for rowNum, row := range rows {
 		if row[idIndex] != "" {
-
 			if rr > 0 {
 				builder.WriteString(",\n")
 			}
@@ -75,14 +34,11 @@ func outputJson(tmpl *template.Template, writePath string, colNames []string, ty
 					if v, err := field.parser.Parse(row[i]); err != nil {
 						panic(fmt.Errorf("parse err:(%v) table:(%s) columm:(%s) types:(%s) row:(%d) str:(%s)", err, table.name, colNames[i], types[i], rowNum+DatasRow+1, row[i]))
 					} else {
-						if v.valueType == typeStruct && len(v.value.(*Struct).fields) == 0 {
-							continue
-						}
 						if cc > 0 {
 							builder.WriteString(",")
 						}
 						fmt.Fprintf(&builder, "\"%s\":", field.name)
-						v.ToJsonString(&builder)
+						builder.WriteString(v.ToJsonStr())
 						cc++
 					}
 				}
