@@ -52,8 +52,8 @@ func trim(s string) string {
 type Parser interface {
 	Parse(string) (*Value, error)
 	ValueType() int
-	GetGoType() string                 //获取go类型
-	GenGoStruct(string, string) string //生成go结构体
+	GetGoType() string                    //获取go类型
+	GenGoStruct(*strings.Builder, string) //生成go结构体
 }
 
 type ValueParser struct {

@@ -175,8 +175,9 @@ func main() {
 	case "go":
 		j := &goStruct{
 			gopackage: *gopackage,
-			str:       fmt.Sprintf("package %s\n\n", *gopackage),
+			str:       strings.Builder{},
 		}
+		j.str.WriteString(fmt.Sprintf("package %s\n\n", *gopackage))
 		fn = j.outputGoJson
 		walkOk = j.walkOk
 	default:

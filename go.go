@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 	"text/template"
 )
 
@@ -16,8 +17,7 @@ func title(s string) string {
 	}
 }
 
-func (p *ValueParser) GenGoStruct(s string, _ string) string {
-	return s
+func (p *ValueParser) GenGoStruct(s *strings.Builder, _ string) {
 }
 
 func (p *ValueParser) GetGoType() string {
@@ -35,8 +35,8 @@ func (p *ValueParser) GetGoType() string {
 	}
 }
 
-func (p *ArrayParser) GenGoStruct(s string, s1 string) string {
-	return p.elements.GenGoStruct(s, s1)
+func (p *ArrayParser) GenGoStruct(s *strings.Builder, s1 string) {
+	p.elements.GenGoStruct(s, s1)
 }
 
 func (p *ArrayParser) GetGoType() string {
@@ -47,37 +47,36 @@ func (p *StructParser) GetGoType() string {
 	return p.goType
 }
 
-func (p *StructParser) GenGoStruct(s string, s1 string) string {
+func (p *StructParser) GenGoStruct(s *strings.Builder, s1 string) {
 	goStructType := title(s1)
 	p.goType = "*" + goStructType
 	//先遍历field生成所有嵌套类型
 	for k, v := range p.fields {
-		s = v.GenGoStruct(s, goStructType+title(k))
+		v.GenGoStruct(s, goStructType+title(k))
 	}
 
-	s += fmt.Sprintf("type %s struct {\n", goStructType)
+	fmt.Fprintf(s, "type %s struct {\n", goStructType)
 	for k, v := range p.fields {
 		switch v.(type) {
 		case *StructParser:
-			s += fmt.Sprintf("\t%s %s `json:\"%s\"`\n", title(k), v.GetGoType(), k)
+			fmt.Fprintf(s, "\t%s %s `json:\"%s\"`\n", title(k), v.GetGoType(), k)
 		case *ArrayParser:
 			switch v.(*ArrayParser).elements.(type) {
 			case *StructParser:
-				s += fmt.Sprintf("\t%s %s `json:\"%s\"`\n", title(k), v.GetGoType(), k)
+				fmt.Fprintf(s, "\t%s %s `json:\"%s\"`\n", title(k), v.GetGoType(), k)
 			default:
-				s += fmt.Sprintf("\t%s %s `json:\"%s\"`\n", title(k), v.GetGoType(), k)
+				fmt.Fprintf(s, "\t%s %s `json:\"%s\"`\n", title(k), v.GetGoType(), k)
 			}
 		default:
-			s += fmt.Sprintf("\t%s %s `json:\"%s\"`\n", title(k), v.GetGoType(), k)
+			fmt.Fprintf(s, "\t%s %s `json:\"%s\"`\n", title(k), v.GetGoType(), k)
 		}
 	}
-	s += "}\n\n"
-	return s
+	s.WriteString("}\n\n")
 }
 
 type goStruct struct {
 	gopackage string
-	str       string
+	str       strings.Builder
 }
 
 func (j *goStruct) walkOk(writePath string) {
@@ -102,7 +101,7 @@ func (j *goStruct) walkOk(writePath string) {
 		panic(err)
 	}
 
-	f.WriteString(j.str)
+	f.WriteString(j.str.String())
 
 	fmt.Printf("write %s ok\n", filename)
 }
@@ -111,27 +110,27 @@ func (j *goStruct) outputGoJson(tmpl *template.Template, writePath string, colNa
 	//先生成所有结构体类型
 	for _, field := range table.fields {
 		if field.parser != nil {
-			j.str = field.parser.GenGoStruct(j.str, title(table.name)+title(field.name))
+			field.parser.GenGoStruct(&j.str, title(table.name)+title(field.name))
 		}
 	}
 
-	j.str += fmt.Sprintf("type %s struct {\n", title(table.name))
+	fmt.Fprintf(&j.str, "type %s struct {\n", title(table.name))
 	for _, field := range table.fields {
 		if field.parser != nil {
 			switch field.parser.(type) {
 			case *StructParser:
-				j.str += fmt.Sprintf("\t%s %s `json:\"%s\"` \n", title(field.name), field.parser.GetGoType(), field.name)
+				fmt.Fprintf(&j.str, "\t%s %s `json:\"%s\"` \n", title(field.name), field.parser.GetGoType(), field.name)
 			case *ArrayParser:
 				switch field.parser.(*ArrayParser).elements.(type) {
 				case *StructParser:
-					j.str += fmt.Sprintf("\t%s %s `json:\"%s\"` \n", title(field.name), field.parser.GetGoType(), field.name)
+					fmt.Fprintf(&j.str, "\t%s %s `json:\"%s\"` \n", title(field.name), field.parser.GetGoType(), field.name)
 				default:
-					j.str += fmt.Sprintf("\t%s %s `json:\"%s\"` \n", title(field.name), field.parser.GetGoType(), field.name)
+					fmt.Fprintf(&j.str, "\t%s %s `json:\"%s\"` \n", title(field.name), field.parser.GetGoType(), field.name)
 				}
 			default:
-				j.str += fmt.Sprintf("\t%s %s `json:\"%s\"` \n", title(field.name), field.parser.GetGoType(), field.name)
+				fmt.Fprintf(&j.str, "\t%s %s `json:\"%s\"` \n", title(field.name), field.parser.GetGoType(), field.name)
 			}
 		}
 	}
-	j.str += "}\n\n"
+	j.str.WriteString("}\n\n")
 }

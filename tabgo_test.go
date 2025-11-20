@@ -40,8 +40,9 @@ func TestMakeParser(t *testing.T) {
 func TestParseGo(t *testing.T) {
 	{
 		p, _ := MakeParser("{x:int,y:{x:int,y:int},array:{x:int,y:{xx:int}[]}[]}[]")
-		s := p.GenGoStruct("", "f")
-		fmt.Println(s, p.GetGoType())
+		sb := strings.Builder{}
+		p.GenGoStruct(&sb, "f")
+		fmt.Println(sb.String(), p.GetGoType())
 	}
 }
 
