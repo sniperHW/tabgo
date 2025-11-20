@@ -52,7 +52,7 @@ func trim(s string) string {
 type Parser interface {
 	Parse(string) (*Value, error)
 	ValueType() int
-	GetGoType(string) string           //获取go类型
+	GetGoType() string                 //获取go类型
 	GenGoStruct(string, string) string //生成go结构体
 }
 
@@ -60,11 +60,11 @@ type ValueParser struct {
 	valueType int
 }
 
-func (p ValueParser) ValueType() int {
+func (p *ValueParser) ValueType() int {
 	return p.valueType
 }
 
-func (p ValueParser) Parse(s string) (*Value, error) {
+func (p *ValueParser) Parse(s string) (*Value, error) {
 	var err error
 	v := &Value{valueType: p.valueType}
 	switch p.valueType {
@@ -98,14 +98,14 @@ func (p ValueParser) Parse(s string) (*Value, error) {
 }
 
 type ArrayParser struct {
-	child Parser
+	elements Parser
 }
 
-func (p ArrayParser) ValueType() int {
+func (p *ArrayParser) ValueType() int {
 	return typeArray
 }
 
-func (p ArrayParser) splitCompose(s string, bracket string) (ret []string, err error) {
+func (p *ArrayParser) splitCompose(s string, bracket string) (ret []string, err error) {
 	if s == "" {
 		return ret, nil
 	} else {
@@ -139,18 +139,18 @@ func (p ArrayParser) splitCompose(s string, bracket string) (ret []string, err e
 	}
 }
 
-func (p ArrayParser) split(s string) (ret []string, err error) {
+func (p *ArrayParser) split(s string) (ret []string, err error) {
 	if s[0] != '[' || s[len(s)-1] != ']' {
 		return ret, errors.New("ArrayParser.split bracket mismatch")
 	}
 	s = s[1 : len(s)-1] //去掉头尾括号
-	switch p.child.(type) {
-	case ArrayParser:
+	switch p.elements.(type) {
+	case *ArrayParser:
 		ret, err = p.splitCompose(s, "[]")
-	case StructParser:
+	case *StructParser:
 		ret, err = p.splitCompose(s, "{}")
 	default:
-		if p.child.ValueType() == typeString {
+		if p.elements.ValueType() == typeString {
 			left := false
 			//内嵌的string值必须用""包裹，如果内容包含"需要使用\转义
 			var ss strings.Builder
@@ -194,7 +194,7 @@ func (p ArrayParser) split(s string) (ret []string, err error) {
 	return ret, err
 }
 
-func (p ArrayParser) Parse(s string) (*Value, error) {
+func (p *ArrayParser) Parse(s string) (*Value, error) {
 	array := &Array{}
 	s = trim(s)
 	if !(s == "" || s == "[]") {
@@ -202,7 +202,7 @@ func (p ArrayParser) Parse(s string) (*Value, error) {
 			return nil, err
 		} else {
 			for _, vv := range e {
-				if value, err := p.child.Parse(vv); err != nil {
+				if value, err := p.elements.Parse(vv); err != nil {
 					return nil, err
 				} else {
 					array.value = append(array.value, value)
@@ -215,13 +215,14 @@ func (p ArrayParser) Parse(s string) (*Value, error) {
 
 type StructParser struct {
 	fields map[string]Parser
+	goType string
 }
 
-func (p StructParser) ValueType() int {
+func (p *StructParser) ValueType() int {
 	return typeStruct
 }
 
-func (p StructParser) readFieldName(s string) (string, string, error) {
+func (p *StructParser) readFieldName(s string) (string, string, error) {
 	o := -1
 	for i := 0; i < len(s); i++ {
 		if o == -1 && s[i] >= 'a' && s[i] <= 'z' {
@@ -237,7 +238,7 @@ func (p StructParser) readFieldName(s string) (string, string, error) {
 	return "", "", errors.New("ErrReadFieldName2")
 }
 
-func (p StructParser) readComposeFiledValue(s string, parser Parser, bracket string) (*Value, string, error) {
+func (p *StructParser) readComposeFiledValue(s string, parser Parser, bracket string) (*Value, string, error) {
 	s = trim(s)
 	if s[0] != bracket[0] {
 		return nil, "", errors.New("StructParser.readComposeFiledValue left bracket mismatch")
@@ -267,9 +268,9 @@ func (p StructParser) readComposeFiledValue(s string, parser Parser, bracket str
 	}
 }
 
-func (p StructParser) readFieldValue(s string, parser Parser) (*Value, string, error) {
+func (p *StructParser) readFieldValue(s string, parser Parser) (*Value, string, error) {
 	switch parser.(type) {
-	case ValueParser:
+	case *ValueParser:
 		i := 0
 		var value string
 		if parser.ValueType() == typeString {
@@ -327,16 +328,16 @@ func (p StructParser) readFieldValue(s string, parser Parser) (*Value, string, e
 			return v, s[i+1:], nil
 		}
 
-	case ArrayParser:
+	case *ArrayParser:
 		return p.readComposeFiledValue(s, parser, "[]")
-	case StructParser:
+	case *StructParser:
 		return p.readComposeFiledValue(s, parser, "{}")
 	default:
 		return nil, "", errors.New("ErrReadFieldValue7")
 	}
 }
 
-func (p StructParser) Parse(s string) (*Value, error) {
+func (p *StructParser) Parse(s string) (*Value, error) {
 	s = trim(s)
 	v := &Value{valueType: typeStruct}
 	st := &Struct{}
@@ -412,25 +413,25 @@ func MakeParser(s string) (Parser, error) {
 	s = trim(s)
 	switch s {
 	case "int":
-		return ValueParser{valueType: typeInt}, nil
+		return &ValueParser{valueType: typeInt}, nil
 	case "string":
-		return ValueParser{valueType: typeString}, nil
+		return &ValueParser{valueType: typeString}, nil
 	case "bool":
-		return ValueParser{valueType: typeBool}, nil
+		return &ValueParser{valueType: typeBool}, nil
 	case "float":
-		return ValueParser{valueType: typeFloat}, nil
+		return &ValueParser{valueType: typeFloat}, nil
 	default:
 		if strings.HasSuffix(s, "[]") {
 			s = strings.TrimSuffix(s, "[]")
-			p := ArrayParser{}
-			if p.child, err = MakeParser(s); err != nil {
+			p := &ArrayParser{}
+			if p.elements, err = MakeParser(s); err != nil {
 				return nil, err
 			} else {
 				return p, nil
 			}
 		} else if len(s) > 2 && s[0] == '{' && s[len(s)-1] == '}' {
 			s = s[1 : len(s)-1] //去掉头尾括号
-			p := StructParser{fields: map[string]Parser{}}
+			p := &StructParser{fields: map[string]Parser{}}
 			for s != "" {
 				if name, typeStr, s, err = readStructField(s); err != nil {
 					return nil, err
