@@ -14,15 +14,15 @@ var filterToken []string = []string{
 	"\t",
 }
 
-var filterRune []rune = []rune{
+var filterChar []byte = []byte{
 	' ',
 	'\r',
 	'\n',
 	'\t',
 }
 
-func isFilterRune(r rune) bool {
-	for _, v := range filterRune {
+func isFilterChar(r byte) bool {
+	for _, v := range filterChar {
 		if r == v {
 			return true
 		}
@@ -154,8 +154,7 @@ func (p ArrayParser) split(s string) (ret []string, err error) {
 			left := false
 			//内嵌的string值必须用""包裹，如果内容包含"需要使用\转义
 			var ss strings.Builder
-			for i := 0; i < len(s); i++ {
-				v := rune(s[i])
+			for i, v := range s {
 				if v == '"' {
 					if !left {
 						left = true
@@ -164,10 +163,10 @@ func (p ArrayParser) split(s string) (ret []string, err error) {
 						if i != len(s)-1 {
 							i++
 							for ; i < len(s); i++ {
-								v = rune(s[i])
+								v := s[i]
 								if v == ',' {
 									break
-								} else if !isFilterRune(v) {
+								} else if !isFilterChar(v) {
 									return ret, errors.New("ArrayParser.split error1")
 								}
 							}
@@ -286,10 +285,10 @@ func (p StructParser) readFieldValue(s string, parser Parser) (*Value, string, e
 						if k != len(s)-1 {
 							k++
 							for ; k < len(s); k++ {
-								v = rune(s[k])
+								v := s[k]
 								if v == ',' {
 									break
-								} else if !isFilterRune(v) {
+								} else if !isFilterChar(v) {
 									return nil, "", errors.New("StructParser.readFieldValue error1")
 								}
 							}

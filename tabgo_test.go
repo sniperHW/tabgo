@@ -48,6 +48,24 @@ func TestParseGo(t *testing.T) {
 func TestParse(t *testing.T) {
 
 	{
+		p, _ := MakeParser("{x:string}")
+		v, err := p.Parse("{x:\"你好\"}") //正确形式[[1,2],[3,4]]
+		sb := strings.Builder{}
+		fmt.Println(err)
+		v.ToJsonString(&sb)
+		fmt.Println(sb.String())
+	}
+
+	{
+		p, _ := MakeParser("string[]")
+		v, err := p.Parse("[\"你好\",\"世界\"]") //正确形式[[1,2],[3,4]]
+		sb := strings.Builder{}
+		fmt.Println(err)
+		v.ToJsonString(&sb)
+		fmt.Println(sb.String())
+	}
+
+	{
 		p, _ := MakeParser("{x:int,y:{x:int,y:int},array:int[]}")
 		v, err := p.Parse("{x:1,y:{x:2,y:3},array:[1,2,3,4]}") //正确形式[[1,2],[3,4]]
 		sb := strings.Builder{}

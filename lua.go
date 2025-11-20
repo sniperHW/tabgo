@@ -42,9 +42,9 @@ func (v *Value) ToLuaString(s *strings.Builder) {
 	case typeStruct:
 		v.value.(*Struct).ToLuaString(s)
 	case typeString:
-		s.WriteString(fmt.Sprintf("\"%v\"", v.value))
+		fmt.Fprintf(s, "\"%v\"", v.value)
 	default:
-		s.WriteString(fmt.Sprintf("%v", v.value))
+		fmt.Fprintf(s, "%v", v.value)
 	}
 }
 
@@ -69,7 +69,7 @@ func outputLua(tmpl *template.Template, writePath string, colNames []string, typ
 			if rr > 0 {
 				builder.WriteString(",\n")
 			}
-			builder.WriteString(fmt.Sprintf("\t[%v]={", row[0]))
+			fmt.Fprintf(&builder, "\t[%v]={", row[0])
 			cc := 0
 			for i, field := range table.fields {
 				if field.parser != nil {
@@ -82,7 +82,7 @@ func outputLua(tmpl *template.Template, writePath string, colNames []string, typ
 						if cc > 0 {
 							builder.WriteString(",")
 						}
-						builder.WriteString(fmt.Sprintf("%s=", field.name))
+						fmt.Fprintf(&builder, "%s=", field.name)
 						v.ToLuaString(&builder)
 						cc++
 

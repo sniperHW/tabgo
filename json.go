@@ -20,7 +20,7 @@ func (a *Array) ToJsonString(s *strings.Builder) {
 }
 
 func (f *Field) ToJsonString(s *strings.Builder) {
-	s.WriteString(fmt.Sprintf("\"%s\":", f.name))
+	fmt.Fprintf(s, "\"%s\":", f.name)
 	f.value.ToJsonString(s)
 }
 
@@ -42,9 +42,9 @@ func (v *Value) ToJsonString(s *strings.Builder) {
 	case typeStruct:
 		v.value.(*Struct).ToJsonString(s)
 	case typeString:
-		s.WriteString(fmt.Sprintf("\"%v\"", v.value))
+		fmt.Fprintf(s, "\"%v\"", v.value)
 	default:
-		s.WriteString(fmt.Sprintf("%v", v.value))
+		fmt.Fprintf(s, "%v", v.value)
 	}
 }
 
@@ -68,7 +68,7 @@ func outputJson(tmpl *template.Template, writePath string, colNames []string, ty
 				builder.WriteString(",\n")
 			}
 
-			builder.WriteString(fmt.Sprintf("\t\"%v\":{", row[0]))
+			fmt.Fprintf(&builder, "\t\"%v\":{", row[0])
 			cc := 0
 			for i, field := range table.fields {
 				if field.parser != nil {
@@ -81,7 +81,7 @@ func outputJson(tmpl *template.Template, writePath string, colNames []string, ty
 						if cc > 0 {
 							builder.WriteString(",")
 						}
-						builder.WriteString(fmt.Sprintf("\"%s\":", field.name))
+						fmt.Fprintf(&builder, "\"%s\":", field.name)
 						v.ToJsonString(&builder)
 						cc++
 					}
