@@ -214,8 +214,9 @@ func (p *ArrayParser) Parse(s string) (*Value, error) {
 }
 
 type StructParser struct {
-	fields map[string]Parser
-	goType string
+	fields      map[string]Parser
+	fieldsArray []string
+	goType      string
 }
 
 func (p *StructParser) ValueType() int {
@@ -437,6 +438,7 @@ func MakeParser(s string) (Parser, error) {
 					return nil, err
 				} else if fieldParser, err := MakeParser(typeStr); err == nil {
 					p.fields[name] = fieldParser
+					p.fieldsArray = append(p.fieldsArray, name)
 				} else {
 					return nil, err
 				}
