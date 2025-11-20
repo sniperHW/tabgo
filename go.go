@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"text/template"
 
@@ -29,7 +30,14 @@ func (j *goStruct) walkOk(writePath string) {
 			panic(err)
 		}
 	}
-	defer f.Close()
+	defer func() {
+		f.Close()
+		cmd := exec.Command("gofmt", "-w", filename)
+		err = cmd.Run()
+		if err != nil {
+			fmt.Println(err)
+		}
+	}()
 
 	err = os.Truncate(filename, 0)
 	if err != nil {
