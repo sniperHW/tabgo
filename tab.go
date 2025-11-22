@@ -174,12 +174,15 @@ func main() {
 		}
 	case "go":
 		j := &goStruct{
-			gopackage: *gopackage,
-			str:       strings.Builder{},
+			Package: *gopackage,
+			str:     strings.Builder{},
 		}
-		j.str.WriteString(fmt.Sprintf("package %s\n\n", *gopackage))
 		fn = j.outputGoJson
 		walkOk = j.walkOk
+		tmpl, err = template.New("test").Parse(goTemplate)
+		if err != nil {
+			panic(err)
+		}
 	default:
 		panic("unsupport mode")
 	}

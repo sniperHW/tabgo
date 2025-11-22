@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -66,13 +67,85 @@ func (p *StructParser) GenGoStruct(s *strings.Builder, s1 string) {
 }
 
 type goStruct struct {
-	gopackage string
+	TableName string
+	Data      string
+	Package   string
+	tmpl      *template.Template
 	str       strings.Builder
 }
 
+var goTemplate string = `
+package {{.Package}}
+
+import(
+	"encoding/json"
+	"io"
+	"os"
+	"sync/atomic"
+)
+
+{{.Data}}
+
+type _{{.TableName}}Map map[int]*{{.TableName}}
+
+var __{{.TableName}}Map atomic.Value
+
+func init() {
+	__{{.TableName}}Map.Store(make(_{{.TableName}}Map))
+}
+
+func get{{.TableName}}Map() _{{.TableName}}Map {
+	return __{{.TableName}}Map.Load().(_{{.TableName}}Map)
+}
+
+func set{{.TableName}}Map(m _{{.TableName}}Map) {
+	__{{.TableName}}Map.Store(m)
+}
+
+func Get{{.TableName}}(id int) (*{{.TableName}}, bool) {
+	m, ok := get{{.TableName}}Map()[id]
+	return m, ok
+}
+
+func load{{.TableName}}FromBytes(s []byte) error {
+	m := make(_{{.TableName}}Map)
+	err := json.Unmarshal(s, &m)
+	if err != nil {
+		return err
+	}
+	set{{.TableName}}Map(m)
+	return nil
+}
+
+func Load{{.TableName}}FromString(s string) error {
+	return load{{.TableName}}FromBytes([]byte(s))
+}
+
+func Load{{.TableName}}FromFile(path string) error {
+	jsonFile, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer jsonFile.Close()
+	jsonData, err := io.ReadAll(jsonFile)
+	if err != nil {
+		return err
+	}
+	return load{{.TableName}}FromBytes(jsonData)
+}
+
+func ForEach{{.TableName}}(fn func(m *{{.TableName}}) bool) {
+	for _, m := range get{{.TableName}}Map() {
+		if !fn(m) {
+			break
+		}
+	}
+}
+`
+
 func (j *goStruct) walkOk(writePath string) {
-	path := fmt.Sprintf("%s/%s", writePath, j.gopackage)
-	filename := fmt.Sprintf("%s/%s.go", path, j.gopackage)
+	path := fmt.Sprintf("%s/%s", writePath, j.Package)
+	filename := fmt.Sprintf("%s/%s.go", path, j.TableName)
 	os.MkdirAll(path, os.ModePerm)
 	f, err := os.OpenFile(filename, os.O_RDWR, os.ModePerm)
 	if err != nil {
@@ -100,11 +173,18 @@ func (j *goStruct) walkOk(writePath string) {
 		panic(err)
 	}
 
-	f.WriteString(j.str.String())
-	fmt.Printf("write %s ok\n", filename)
+	j.Data = j.str.String()
+	err = j.tmpl.Execute(f, j)
+	if err != nil {
+		panic(err)
+	} else {
+		log.Printf("%s Write ok\n", filename)
+	}
 }
 
 func (j *goStruct) outputGoJson(tmpl *template.Template, writePath string, colNames []string, types []string, rows [][]string, table *Table, idIndex int) {
+	j.TableName = table.name
+	j.tmpl = tmpl
 	fields := []string{}
 	for i := 0; i < len(colNames); i++ {
 		fields = append(fields, fmt.Sprintf("%s:%s", strings.Split(colNames[i], ":")[0], types[i]))
