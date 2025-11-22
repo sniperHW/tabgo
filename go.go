@@ -50,6 +50,13 @@ func (j *goStruct) walkOk(writePath string) {
 }
 
 func (j *goStruct) outputGoJson(tmpl *template.Template, writePath string, colNames []string, types []string, rows [][]string, table *Table, idIndex int) {
+
+	{
+		indexName := table.fields[idIndex].name
+		indexType := table.fields[idIndex].parser.GenGoDefine("")
+		fmt.Println(indexName, indexType)
+	}
+
 	fields := []string{}
 	for i := 0; i < len(colNames); i++ {
 		fields = append(fields, fmt.Sprintf("%s:%s", strings.Split(colNames[i], ":")[0], types[i]))
