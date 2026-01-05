@@ -15,7 +15,6 @@ type goStruct struct {
 	TableName string
 	Data      string
 	Package   string
-	tmpl      *template.Template
 	str       strings.Builder
 }
 
@@ -88,7 +87,7 @@ func ForEach{{.TableName}}(fn func(m *{{.TableName}}) bool) {
 }
 `
 
-func (j *goStruct) walkOk(writePath string) {
+func (j *goStruct) walkOk(writePath string, tmpl *template.Template) {
 	path := fmt.Sprintf("%s/%s", writePath, j.Package)
 	filename := fmt.Sprintf("%s/%s.go", path, j.TableName)
 	os.MkdirAll(path, os.ModePerm)
@@ -118,7 +117,7 @@ func (j *goStruct) walkOk(writePath string) {
 	}
 
 	j.Data = j.str.String()
-	err = j.tmpl.Execute(f, j)
+	err = tmpl.Execute(f, j)
 	if err != nil {
 		panic(err)
 	} else {
@@ -126,9 +125,9 @@ func (j *goStruct) walkOk(writePath string) {
 	}
 }
 
-func (j *goStruct) outputGoJson(tmpl *template.Template, writePath string, colNames []string, types []string, rows [][]string, table *Table, idIndex int) {
+// processTable 处理表结构，生成 Go 类型定义
+func (j *goStruct) processTable(colNames []string, types []string, table *Table) {
 	j.TableName = table.name
-	j.tmpl = tmpl
 	fields := []string{}
 	for i := 0; i < len(colNames); i++ {
 		fields = append(fields, fmt.Sprintf("%s:%s", strings.Split(colNames[i], ":")[0], types[i]))

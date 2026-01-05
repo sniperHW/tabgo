@@ -3,6 +3,7 @@ package parser
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // Value 表示解析后的值
@@ -59,31 +60,37 @@ func (v *Value) toLuaValue(indent int) string {
 		if len(arr) == 0 {
 			return "{}"
 		}
-		result := "{"
+		var result strings.Builder
+		result.Grow(len(arr) * 10) // 预分配空间，减少扩容
+		result.WriteString("{")
 		for i, item := range arr {
 			if i > 0 {
-				result += ","
+				result.WriteString(",")
 			}
-			result += item.toLuaValue(0)
+			result.WriteString(item.toLuaValue(0))
 		}
-		result += "}"
-		return result
+		result.WriteString("}")
+		return result.String()
 	case "struct":
 		fields := v.Value.(map[string]*Value)
 		if len(fields) == 0 {
 			return "{}"
 		}
-		result := "{"
+		var result strings.Builder
+		result.Grow(len(fields) * 20) // 预分配空间
+		result.WriteString("{")
 		first := true
 		for k, val := range fields {
 			if !first {
-				result += ","
+				result.WriteString(",")
 			}
 			first = false
-			result += k + " = " + val.toLuaValue(0)
+			result.WriteString(k)
+			result.WriteString(" = ")
+			result.WriteString(val.toLuaValue(0))
 		}
-		result += "}"
-		return result
+		result.WriteString("}")
+		return result.String()
 	default:
 		return "nil"
 	}
@@ -91,22 +98,23 @@ func (v *Value) toLuaValue(indent int) string {
 
 // escapeString 转义字符串中的特殊字符
 func escapeString(s string) string {
-	result := ""
+	var result strings.Builder
+	result.Grow(len(s) * 2) // 预分配空间，最坏情况下每个字符都需要转义
 	for _, r := range s {
 		switch r {
 		case '"':
-			result += "\\\""
+			result.WriteString("\\\"")
 		case '\\':
-			result += "\\\\"
+			result.WriteString("\\\\")
 		case '\n':
-			result += "\\n"
+			result.WriteString("\\n")
 		case '\r':
-			result += "\\r"
+			result.WriteString("\\r")
 		case '\t':
-			result += "\\t"
+			result.WriteString("\\t")
 		default:
-			result += string(r)
+			result.WriteRune(r)
 		}
 	}
-	return result
+	return result.String()
 }
