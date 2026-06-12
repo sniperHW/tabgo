@@ -42,6 +42,7 @@ type {{.TableNameLower}}Map struct {
 	{{.TableNameLower}}Map atomic.Value
 	lastDigest             [sha256.Size]byte
 	hasDigest              bool
+	onLoadFinish           []func()
 }
 
 var {{.TableName}}Map {{.TableNameLower}}Map
@@ -108,6 +109,16 @@ func (m *{{.TableNameLower}}Map) ForEach(fn func(m *{{.TableName}}) bool) {
 		}
 	}
 }
+
+func (m *{{.TableNameLower}}Map) OnLoadFinish(fn func()) {
+	m.onLoadFinish = append(m.onLoadFinish, fn)
+}
+
+func (m *{{.TableNameLower}}Map) fireOnLoadFinish() {
+	for _, fn := range m.onLoadFinish {
+		fn()
+	}
+}
 `
 
 var loaderTemplate string = `package {{.Package}}
@@ -119,18 +130,9 @@ import (
 	"strings"
 )
 
-type tableLoader struct {
-	onLoadFinish map[string][]func()
-}
+type tableLoader struct{}
 
 var TableLoader tableLoader
-
-func (l *tableLoader) OnLoadFinish(tabname string, fn func()) {
-	if l.onLoadFinish == nil {
-		l.onLoadFinish = make(map[string][]func())
-	}
-	l.onLoadFinish[tabname] = append(l.onLoadFinish[tabname], fn)
-}
 
 func (l *tableLoader) Load(path string) {
 	entries, err := os.ReadDir(path)
@@ -138,37 +140,33 @@ func (l *tableLoader) Load(path string) {
 		log.Println("read dir ", path, "error:", err)
 		return
 	}
-	loaded := map[string]bool{}
+	loaded := []func(){}
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
-			if name, ok := l.load(filepath.Join(path, entry.Name())); ok {
-				loaded[name] = true
+			if fn := l.load(filepath.Join(path, entry.Name())); fn != nil {
+				loaded = append(loaded, fn)
 			}
 		}
 	}
-	for name, fns := range l.onLoadFinish {
-		if loaded[name] {
-			for _, fn := range fns {
-				fn()
-			}
-		}
+	for _, fn := range loaded {
+		fn()
 	}
 }
 
-func (l *tableLoader) load(file string) (string, bool) {
+func (l *tableLoader) load(file string) func() {
 	name := filepath.Base(file)
 	name = strings.TrimSuffix(name, ".json")
 	switch name {
 {{range .Tables}}
 	case "{{.OrigName}}":
-		loaded, err := {{.Name}}Map.LoadFromFile(file)
-		if err != nil {
+		if loaded, err := {{.Name}}Map.LoadFromFile(file); err != nil {
 			log.Println("load ", file, "error:", err)
+		} else if loaded {
+			return {{.Name}}Map.fireOnLoadFinish
 		}
-		return name, loaded
 {{end}}
 	}
-	return name, false
+	return nil
 }
 `
 

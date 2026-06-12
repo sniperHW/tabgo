@@ -9,7 +9,7 @@ import (
 // go读取json输出文件
 func main() {
 
-	test.TableLoader.OnLoadFinish("Model", func() {
+	test.ModelMap.OnLoadFinish(func() {
 		fmt.Println("OnLoadFinish")
 	})
 
