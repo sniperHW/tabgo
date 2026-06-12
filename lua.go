@@ -8,46 +8,6 @@ import (
 	"text/template"
 )
 
-func (a *Array) ToLuaString(s *strings.Builder) {
-	s.WriteString("{")
-	for i, vv := range a.value {
-		vv.ToLuaString(s)
-		if i != len(a.value)-1 {
-			s.WriteString(",")
-		}
-	}
-	s.WriteString("}")
-}
-
-func (f *Field) ToLuaString(s *strings.Builder) {
-	s.WriteString(f.name + "=")
-	f.value.ToLuaString(s)
-}
-
-func (ss *Struct) ToLuaString(s *strings.Builder) {
-	s.WriteString("{")
-	for i, vv := range ss.fields {
-		vv.ToLuaString(s)
-		if i != len(ss.fields)-1 {
-			s.WriteString(",")
-		}
-	}
-	s.WriteString("}")
-}
-
-func (v *Value) ToLuaString(s *strings.Builder) {
-	switch v.valueType {
-	case typeArray:
-		v.value.(*Array).ToLuaString(s)
-	case typeStruct:
-		v.value.(*Struct).ToLuaString(s)
-	case typeString:
-		fmt.Fprintf(s, "\"%v\"", v.value)
-	default:
-		fmt.Fprintf(s, "%v", v.value)
-	}
-}
-
 type lua struct {
 	TableName string
 	Data      string
@@ -55,7 +15,7 @@ type lua struct {
 
 var luaTemplate string = `
 local {{.TableName}} = {
-{{.Data}}	
+{{.Data}}
 }
 
 return {{.TableName}}
@@ -76,14 +36,11 @@ func outputLua(tmpl *template.Template, writePath string, colNames []string, typ
 					if v, err := field.parser.Parse(row[i]); err != nil {
 						panic(fmt.Errorf("parse err:(%v) table:(%s) columm:(%s) types:(%s) row:(%d) str:(%s)", err, table.name, colNames[i], types[i], rowNum+DatasRow+1, row[i]))
 					} else {
-						if v.valueType == typeStruct && len(v.value.(*Struct).fields) == 0 {
-							continue
-						}
 						if cc > 0 {
 							builder.WriteString(",")
 						}
 						fmt.Fprintf(&builder, "%s=", field.name)
-						v.ToLuaString(&builder)
+						builder.WriteString(v.ToLuaStr())
 						cc++
 
 					}

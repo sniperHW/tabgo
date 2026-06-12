@@ -7,70 +7,14 @@ import (
 	"os/exec"
 	"strings"
 	"text/template"
+
+	"github.com/sniperHW/tabgo/parser"
 )
-
-func title(s string) string {
-	if len(s) > 0 && s[0] >= 'a' && s[0] <= 'z' {
-		b := []byte(s)
-		b[0] -= ('a' - 'A')
-		return string(b)
-	} else {
-		return s
-	}
-}
-
-func (p *ValueParser) GenGoStruct(s *strings.Builder, _ string) {
-}
-
-func (p *ValueParser) GetGoType() string {
-	switch p.valueType {
-	case typeInt:
-		return "int"
-	case typeString:
-		return "string"
-	case typeBool:
-		return "bool"
-	case typeFloat:
-		return "float64"
-	default:
-		panic("error")
-	}
-}
-
-func (p *ArrayParser) GenGoStruct(s *strings.Builder, s1 string) {
-	p.elements.GenGoStruct(s, s1)
-}
-
-func (p *ArrayParser) GetGoType() string {
-	return "[]" + p.elements.GetGoType()
-}
-
-func (p *StructParser) GetGoType() string {
-	return p.goType
-}
-
-func (p *StructParser) GenGoStruct(s *strings.Builder, s1 string) {
-	goStructType := title(s1)
-	p.goType = goStructType
-	//先遍历field生成所有嵌套类型
-	for _, v := range p.fieldsArray {
-		f := p.fields[v]
-		f.GenGoStruct(s, goStructType+title(v))
-	}
-
-	fmt.Fprintf(s, "type %s struct {\n", goStructType)
-	for _, v := range p.fieldsArray {
-		f := p.fields[v]
-		fmt.Fprintf(s, "\t%s %s `json:\"%s\"`\n", title(v), f.GetGoType(), v)
-	}
-	s.WriteString("}\n\n")
-}
 
 type goStruct struct {
 	TableName string
 	Data      string
 	Package   string
-	tmpl      *template.Template
 	str       strings.Builder
 }
 
@@ -143,7 +87,7 @@ func ForEach{{.TableName}}(fn func(m *{{.TableName}}) bool) {
 }
 `
 
-func (j *goStruct) walkOk(writePath string) {
+func (j *goStruct) walkOk(writePath string, tmpl *template.Template) {
 	path := fmt.Sprintf("%s/%s", writePath, j.Package)
 	filename := fmt.Sprintf("%s/%s.go", path, j.TableName)
 	os.MkdirAll(path, os.ModePerm)
@@ -158,7 +102,6 @@ func (j *goStruct) walkOk(writePath string) {
 			panic(err)
 		}
 	}
-
 	defer func() {
 		f.Close()
 		cmd := exec.Command("gofmt", "-w", filename)
@@ -174,7 +117,7 @@ func (j *goStruct) walkOk(writePath string) {
 	}
 
 	j.Data = j.str.String()
-	err = j.tmpl.Execute(f, j)
+	err = tmpl.Execute(f, j)
 	if err != nil {
 		panic(err)
 	} else {
@@ -182,17 +125,17 @@ func (j *goStruct) walkOk(writePath string) {
 	}
 }
 
-func (j *goStruct) outputGoJson(tmpl *template.Template, writePath string, colNames []string, types []string, rows [][]string, table *Table, idIndex int) {
+// processTable 处理表结构，生成 Go 类型定义
+func (j *goStruct) processTable(colNames []string, types []string, table *Table) {
 	j.TableName = table.name
-	j.tmpl = tmpl
 	fields := []string{}
 	for i := 0; i < len(colNames); i++ {
 		fields = append(fields, fmt.Sprintf("%s:%s", strings.Split(colNames[i], ":")[0], types[i]))
 	}
 	str := "{" + strings.Join(fields, ",") + "}"
-	p, err := MakeParser(str)
+	p, err := parser.MakeParser(str)
 	if err != nil {
 		panic(err)
 	}
-	p.GenGoStruct(&j.str, title(table.name))
+	j.str.WriteString(p.GenGoDefine(strings.Title(table.name)))
 }

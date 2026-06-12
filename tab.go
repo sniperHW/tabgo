@@ -11,24 +11,16 @@ import (
 	"text/template"
 
 	"github.com/360EntSecGroup-Skylar/excelize"
-)
-
-const (
-	typeInt    = 1
-	typeString = 2
-	typeBool   = 3
-	typeFloat  = 4
-	typeArray  = 5
-	typeStruct = 6
+	"github.com/sniperHW/tabgo/parser"
 )
 
 type Array struct {
-	value []*Value
+	value []*parser.Value
 }
 
 type Field struct {
 	name  string
-	value *Value
+	value *parser.Value
 }
 
 type Struct struct {
@@ -42,7 +34,7 @@ type Value struct {
 
 type Column struct {
 	name   string
-	parser Parser
+	parser *parser.Parser
 }
 
 type Table struct {
@@ -51,12 +43,13 @@ type Table struct {
 }
 
 type Walker struct {
-	loadPath   string
-	writePath  string
-	tmpl       *template.Template
-	funcOutput func(*template.Template, string, []string, []string, [][]string, *Table, int)
-	funcOk     func(string)
-	ignore     map[string]bool
+	loadPath           string
+	writePath          string
+	tmpl               *template.Template
+	funcOutput         func(*template.Template, string, []string, []string, [][]string, *Table, int)
+	funcTableProcessed func([]string, []string, *Table)
+	funcOk             func(string, *template.Template)
+	ignore             map[string]bool
 }
 
 const NamesRow = 0  //名字定义所在的行
@@ -114,7 +107,7 @@ func (w *Walker) walk() {
 							if colName == IdName {
 								idIndex = i
 							}
-							if parser, err := MakeParser(types[i]); err != nil {
+							if parser, err := parser.MakeParser(types[i]); err != nil {
 								panic(fmt.Sprintf("MakeParserError:%v file:%v column:%v", err, filename, names[i]))
 							} else {
 								col := &Column{
@@ -132,7 +125,15 @@ func (w *Walker) walk() {
 						panic("not id field")
 					}
 
-					w.funcOutput(w.tmpl, w.writePath, names, types, rows, table, idIndex)
+					// 如果有表结构处理回调（Go 模式），先调用它生成类型定义
+					if w.funcTableProcessed != nil {
+						w.funcTableProcessed(names, types, table)
+					}
+
+					// 如果有输出回调（JSON/Lua 模式），处理数据行
+					if w.funcOutput != nil {
+						w.funcOutput(w.tmpl, w.writePath, names, types, rows, table, idIndex)
+					}
 				}
 			}()
 		}
@@ -142,7 +143,7 @@ func (w *Walker) walk() {
 	}
 	wait.Wait()
 	if w.funcOk != nil {
-		w.funcOk(w.writePath)
+		w.funcOk(w.writePath, w.tmpl)
 	}
 }
 
@@ -155,7 +156,8 @@ func main() {
 	flag.Parse()
 
 	var fn func(tmpl *template.Template, writePath string, colNames []string, types []string, rows [][]string, tab *Table, idIdx int)
-	var walkOk func(writePath string)
+	var tableProcessed func(colNames []string, types []string, tab *Table)
+	var walkOk func(writePath string, tmpl *template.Template)
 	var tmpl *template.Template
 	var err error
 
@@ -177,23 +179,28 @@ func main() {
 			Package: *gopackage,
 			str:     strings.Builder{},
 		}
-		fn = j.outputGoJson
-		walkOk = j.walkOk
+		tableProcessed = j.processTable
 		tmpl, err = template.New("test").Parse(goTemplate)
 		if err != nil {
 			panic(err)
+		}
+		// 创建一个闭包来传递 tmpl 参数
+		finalTmpl := tmpl
+		walkOk = func(writePath string, t *template.Template) {
+			j.walkOk(writePath, finalTmpl)
 		}
 	default:
 		panic("unsupport mode")
 	}
 
 	w := &Walker{
-		loadPath:   *input,
-		writePath:  *output,
-		tmpl:       tmpl,
-		funcOutput: fn,
-		funcOk:     walkOk,
-		ignore:     map[string]bool{"annotation": true},
+		loadPath:           *input,
+		writePath:          *output,
+		tmpl:               tmpl,
+		funcOutput:         fn,
+		funcTableProcessed: tableProcessed,
+		funcOk:             walkOk,
+		ignore:             map[string]bool{"annotation": true},
 	}
 
 	if *serverOnly == "true" {
