@@ -130,7 +130,9 @@ func (j *goStruct) processTable(colNames []string, types []string, table *Table)
 	j.TableName = table.name
 	fields := []string{}
 	for i := 0; i < len(colNames); i++ {
-		fields = append(fields, fmt.Sprintf("%s:%s", colNames[i], types[i]))
+		if table.fields[i].parser != nil {
+			fields = append(fields, fmt.Sprintf("%s:%s", colNames[i], types[i]))
+		}
 	}
 	str := "{" + strings.Join(fields, ",") + "}"
 	p, err := parser.MakeParser(str)

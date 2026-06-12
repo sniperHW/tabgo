@@ -26,15 +26,12 @@ type ModelArray_struct struct {
 type Model struct {
 	Id           int64               `json:"id"`
 	Name         string              `json:"name"`
-	Icon         string              `json:"icon"`
-	Model        string              `json:"model"`
 	Length       int64               `json:"length"`
 	Width        int64               `json:"width"`
 	Struct       ModelStruct         `json:"struct"`
 	Array        []int64             `json:"array"`
 	Array2d      [][]int64           `json:"array2d"`
 	Array_struct []ModelArray_struct `json:"array_struct"`
-	Annotation   string              `json:"annotation"`
 }
 
 type _ModelMap map[int]*Model

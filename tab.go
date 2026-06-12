@@ -54,8 +54,8 @@ type Walker struct {
 
 const NamesRow = 0  //名字定义所在的行
 const TypesRow = 1  //类型定义所在行
-const TagsRow = 2   //标记所在行
-const DatasRow = 3  //数据起始行
+const TagsRow = 3   //标记所在行
+const DatasRow = 4  //数据起始行
 const IdName = "id" //索引列的名字
 
 func (w *Walker) checkColumn(name string, tag string) (string, bool) {
