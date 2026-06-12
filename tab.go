@@ -49,25 +49,31 @@ type Walker struct {
 	funcOutput         func(*template.Template, string, []string, []string, [][]string, *Table, int)
 	funcTableProcessed func([]string, []string, *Table)
 	funcOk             func(string, *template.Template)
-	ignore             map[string]bool
+	serverOnly         bool
 }
 
 const NamesRow = 0  //名字定义所在的行
 const TypesRow = 1  //类型定义所在行
+const TagsRow = 2   //标记所在行
 const DatasRow = 3  //数据起始行
 const IdName = "id" //索引列的名字
 
-func (w *Walker) checkColumn(s string) (string, bool) {
-	v := strings.Split(s, ":")
-	if v[0] == "" {
-		//名字为空字符串
+func (w *Walker) checkColumn(name string, tag string) (string, bool) {
+	name = strings.TrimSpace(name)
+	if name == "" {
 		return "", false
-	} else if len(v) > 1 && w.ignore[v[1]] {
-		//标记在忽略列表中
-		return "", false
-	} else {
-		return v[0], true
 	}
+	tag = strings.TrimSpace(tag)
+	if tag == "ignore" {
+		return "", false
+	}
+	if name == IdName {
+		return name, true
+	}
+	if w.serverOnly {
+		return name, tag != "c"
+	}
+	return name, tag != "s"
 }
 
 func (w *Walker) walk() {
@@ -94,6 +100,10 @@ func (w *Walker) walk() {
 
 					names := rows[NamesRow]
 					types := rows[TypesRow]
+					var tags []string
+					if len(rows) > TagsRow {
+						tags = rows[TagsRow]
+					}
 					if len(rows) <= DatasRow {
 						return
 					}
@@ -102,8 +112,11 @@ func (w *Walker) walk() {
 					idIndex := -1
 
 					for i := 0; i < len(names); i++ {
-
-						if colName, ok := w.checkColumn(names[i]); ok {
+						var tag string
+						if i < len(tags) {
+							tag = tags[i]
+						}
+						if colName, ok := w.checkColumn(names[i], tag); ok {
 							if colName == IdName {
 								idIndex = i
 							}
@@ -200,12 +213,7 @@ func main() {
 		funcOutput:         fn,
 		funcTableProcessed: tableProcessed,
 		funcOk:             walkOk,
-		ignore:             map[string]bool{"annotation": true},
-	}
-
-	if *serverOnly == "true" {
-		//打服务端表，将所有标记为client的字段加入忽略列表
-		w.ignore["client"] = true
+		serverOnly:         *serverOnly == "true",
 	}
 
 	w.walk()
