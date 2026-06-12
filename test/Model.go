@@ -1,6 +1,7 @@
 package test
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"io"
 	"os"
@@ -35,7 +36,9 @@ type Model struct {
 }
 
 type modelMap struct {
-	modelMap atomic.Value
+	modelMap   atomic.Value
+	lastDigest [sha256.Size]byte
+	hasDigest  bool
 }
 
 var ModelMap modelMap
@@ -76,17 +79,23 @@ func (m *modelMap) LoadFromString(s string) error {
 	return m.loadFromBytes([]byte(s))
 }
 
-func (m *modelMap) LoadFromFile(path string) error {
+func (m *modelMap) LoadFromFile(path string) (bool, error) {
 	jsonFile, err := os.Open(path)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer jsonFile.Close()
 	jsonData, err := io.ReadAll(jsonFile)
 	if err != nil {
-		return err
+		return false, err
 	}
-	return m.loadFromBytes(jsonData)
+	digest := sha256.Sum256(jsonData)
+	if m.hasDigest && m.lastDigest == digest {
+		return false, nil
+	}
+	m.lastDigest = digest
+	m.hasDigest = true
+	return true, m.loadFromBytes(jsonData)
 }
 
 func (m *modelMap) ForEach(fn func(m *Model) bool) {

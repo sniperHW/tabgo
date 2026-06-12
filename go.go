@@ -29,6 +29,7 @@ var goTemplate string = `
 package {{.Package}}
 
 import(
+	"crypto/sha256"
 	"encoding/json"
 	"io"
 	"os"
@@ -39,6 +40,8 @@ import(
 
 type {{.TableNameLower}}Map struct {
 	{{.TableNameLower}}Map atomic.Value
+	lastDigest             [sha256.Size]byte
+	hasDigest              bool
 }
 
 var {{.TableName}}Map {{.TableNameLower}}Map
@@ -79,17 +82,23 @@ func (m *{{.TableNameLower}}Map) LoadFromString(s string) error {
 	return m.loadFromBytes([]byte(s))
 }
 
-func (m *{{.TableNameLower}}Map) LoadFromFile(path string) error {
+func (m *{{.TableNameLower}}Map) LoadFromFile(path string) (bool, error) {
 	jsonFile, err := os.Open(path)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer jsonFile.Close()
 	jsonData, err := io.ReadAll(jsonFile)
 	if err != nil {
-		return err
+		return false, err
 	}
-	return m.loadFromBytes(jsonData)
+	digest := sha256.Sum256(jsonData)
+	if m.hasDigest && m.lastDigest == digest {
+		return false, nil
+	}
+	m.lastDigest = digest
+	m.hasDigest = true
+	return true, m.loadFromBytes(jsonData)
 }
 
 func (m *{{.TableNameLower}}Map) ForEach(fn func(m *{{.TableName}}) bool) {
@@ -111,13 +120,16 @@ import (
 )
 
 type tableLoader struct {
-	onLoadFinish []func() //加载完毕后回调
+	onLoadFinish map[string][]func()
 }
 
 var TableLoader tableLoader
 
-func (l *tableLoader) OnLoadFinish(fn func()) {
-	l.onLoadFinish = append(l.onLoadFinish, fn)
+func (l *tableLoader) OnLoadFinish(tabname string, fn func()) {
+	if l.onLoadFinish == nil {
+		l.onLoadFinish = make(map[string][]func())
+	}
+	l.onLoadFinish[tabname] = append(l.onLoadFinish[tabname], fn)
 }
 
 func (l *tableLoader) Load(path string) {
@@ -126,27 +138,37 @@ func (l *tableLoader) Load(path string) {
 		log.Println("read dir ", path, "error:", err)
 		return
 	}
+	loaded := map[string]bool{}
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
-			l.load(filepath.Join(path, entry.Name()))
+			if name, ok := l.load(filepath.Join(path, entry.Name())); ok {
+				loaded[name] = true
+			}
 		}
 	}
-	for _, v := range l.onLoadFinish {
-		v()
+	for name, fns := range l.onLoadFinish {
+		if loaded[name] {
+			for _, fn := range fns {
+				fn()
+			}
+		}
 	}
 }
 
-func (l *tableLoader) load(file string) {
+func (l *tableLoader) load(file string) (string, bool) {
 	name := filepath.Base(file)
 	name = strings.TrimSuffix(name, ".json")
 	switch name {
 {{range .Tables}}
 	case "{{.OrigName}}":
-		if err := {{.Name}}Map.LoadFromFile(file); err != nil {
+		loaded, err := {{.Name}}Map.LoadFromFile(file)
+		if err != nil {
 			log.Println("load ", file, "error:", err)
 		}
+		return name, loaded
 {{end}}
 	}
+	return name, false
 }
 `
 

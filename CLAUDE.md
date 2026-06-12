@@ -69,3 +69,5 @@ Type definition syntax: `{field:type,field:type}` for structs, `[]type` for arra
 - **`json.go`** (`outputJson`): Writes `{id: {field: value, ...}}` JSON files per table
 - **`lua.go`** (`outputLua`): Writes `local TableName = {[id]={...}}` Lua files per table
 - **`go.go`** (`goStruct`): Generates a `.go` file per table with struct definitions, `atomic.Value`-based map storage, `Load*`/`Get*`/`ForEach*` functions. Generated files are auto-formatted with `gofmt`.
+  - `LoadFromFile` returns `(bool, error)` — `true` when data was actually loaded, `false` when file digest (SHA256) matched and loading was skipped.
+  - `loader.go` provides `tableLoader` with `OnLoadFinish(tabname string, fn func())` — callbacks are only invoked for tables that were actually loaded (digest changed) in the current `Load()` call.
