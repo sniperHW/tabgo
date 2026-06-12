@@ -6,17 +6,23 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"text/template"
 
 	"github.com/sniperHW/tabgo/parser"
 )
 
+type tableEntry struct {
+	OrigName  string
+	Name      string
+	NameLower string
+	Data      string
+}
+
 type goStruct struct {
-	TableName      string
-	TableNameLower string
-	Data           string
-	Package        string
-	str            strings.Builder
+	Package string
+	tables  []tableEntry
+	mu      sync.Mutex
 }
 
 var goTemplate string = `
@@ -95,48 +101,121 @@ func (m *{{.TableNameLower}}Map) ForEach(fn func(m *{{.TableName}}) bool) {
 }
 `
 
+var loaderTemplate string = `package {{.Package}}
+
+import (
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+type tableLoader struct {
+	onLoadFinish []func() //加载完毕后回调
+}
+
+var TableLoader tableLoader
+
+func (l *tableLoader) OnLoadFinish(fn func()) {
+	l.onLoadFinish = append(l.onLoadFinish, fn)
+}
+
+func (l *tableLoader) Load(path string) {
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		log.Println("read dir ", path, "error:", err)
+		return
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
+			l.load(filepath.Join(path, entry.Name()))
+		}
+	}
+	for _, v := range l.onLoadFinish {
+		v()
+	}
+}
+
+func (l *tableLoader) load(file string) {
+	name := filepath.Base(file)
+	name = strings.TrimSuffix(name, ".json")
+	switch name {
+{{range .Tables}}
+	case "{{.OrigName}}":
+		if err := {{.Name}}Map.LoadFromFile(file); err != nil {
+			log.Println("load ", file, "error:", err)
+		}
+{{end}}
+	}
+}
+`
+
+type tableTemplateData struct {
+	Package        string
+	Data           string
+	TableName      string
+	TableNameLower string
+}
+
+type loaderTableInfo struct {
+	OrigName string
+	Name     string
+}
+
+type loaderTemplateData struct {
+	Package string
+	Tables  []loaderTableInfo
+}
+
+func writeGoFile(filename string, tmpl *template.Template, data interface{}) {
+	f, err := os.Create(filename)
+	if err != nil {
+		panic(err)
+	}
+	err = tmpl.Execute(f, data)
+	f.Close()
+	if err != nil {
+		panic(err)
+	}
+	cmd := exec.Command("gofmt", "-w", filename)
+	if err := cmd.Run(); err != nil {
+		fmt.Println(err)
+	}
+	log.Printf("%s Write ok\n", filename)
+}
+
 func (j *goStruct) walkOk(writePath string, tmpl *template.Template) {
-	path := fmt.Sprintf("%s/%s", writePath, j.Package)
-	filename := fmt.Sprintf("%s/%s.go", path, j.TableName)
-	os.MkdirAll(path, os.ModePerm)
-	f, err := os.OpenFile(filename, os.O_RDWR, os.ModePerm)
-	if err != nil {
-		if os.IsNotExist(err) {
-			f, err = os.Create(filename)
-			if err != nil {
-				panic(err)
-			}
-		} else {
-			panic(err)
-		}
-	}
-	defer func() {
-		f.Close()
-		cmd := exec.Command("gofmt", "-w", filename)
-		err = cmd.Run()
-		if err != nil {
-			fmt.Println(err)
-		}
-	}()
+	dir := fmt.Sprintf("%s/%s", writePath, j.Package)
+	os.MkdirAll(dir, os.ModePerm)
 
-	err = os.Truncate(filename, 0)
+	tableNames := make([]loaderTableInfo, 0, len(j.tables))
+	for _, t := range j.tables {
+		filename := fmt.Sprintf("%s/%s.go", dir, t.OrigName)
+		writeGoFile(filename, tmpl, tableTemplateData{
+			Package:        j.Package,
+			Data:           t.Data,
+			TableName:      t.Name,
+			TableNameLower: t.NameLower,
+		})
+		tableNames = append(tableNames, loaderTableInfo{OrigName: t.OrigName, Name: t.Name})
+	}
+
+	loaderFile := fmt.Sprintf("%s/loader.go", dir)
+	loaderTmpl, err := template.New("loader").Parse(loaderTemplate)
 	if err != nil {
 		panic(err)
 	}
-
-	j.Data = j.str.String()
-	err = tmpl.Execute(f, j)
-	if err != nil {
-		panic(err)
-	} else {
-		log.Printf("%s Write ok\n", filename)
-	}
+	writeGoFile(loaderFile, loaderTmpl, loaderTemplateData{
+		Package: j.Package,
+		Tables:  tableNames,
+	})
 }
 
 // processTable 处理表结构，生成 Go 类型定义
 func (j *goStruct) processTable(colNames []string, types []string, table *Table) {
-	j.TableName = strings.Title(table.name)
-	j.TableNameLower = strings.ToLower(table.name)
+	origName := table.name
+	name := strings.Title(table.name)
+	nameLower := strings.ToLower(table.name)
 	fields := []string{}
 	for i := 0; i < len(colNames); i++ {
 		if table.fields[i].parser != nil {
@@ -148,5 +227,13 @@ func (j *goStruct) processTable(colNames []string, types []string, table *Table)
 	if err != nil {
 		panic(err)
 	}
-	j.str.WriteString(p.GenGoDefine(j.TableName))
+	data := p.GenGoDefine(name)
+	j.mu.Lock()
+	j.tables = append(j.tables, tableEntry{
+		OrigName:  origName,
+		Name:      name,
+		NameLower: nameLower,
+		Data:      data,
+	})
+	j.mu.Unlock()
 }

@@ -190,7 +190,6 @@ func main() {
 	case "go":
 		j := &goStruct{
 			Package: *gopackage,
-			str:     strings.Builder{},
 		}
 		tableProcessed = j.processTable
 		tmpl, err = template.New("test").Parse(goTemplate)
