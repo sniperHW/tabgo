@@ -7,6 +7,11 @@ import (
 	"sync/atomic"
 )
 
+type ModelArray_struct struct {
+	X int64 `json:"x"`
+	Y int64 `json:"y"`
+}
+
 type ModelStructY struct {
 	X int64 `json:"x"`
 	Y int64 `json:"y"`
@@ -16,11 +21,6 @@ type ModelStruct struct {
 	X     int64        `json:"x"`
 	Y     ModelStructY `json:"y"`
 	Array []int64      `json:"array"`
-}
-
-type ModelArray_struct struct {
-	X int64 `json:"x"`
-	Y int64 `json:"y"`
 }
 
 type Model struct {
@@ -34,42 +34,49 @@ type Model struct {
 	Array_struct []ModelArray_struct `json:"array_struct"`
 }
 
-type _ModelMap map[int]*Model
-
-var __ModelMap atomic.Value
-
-func init() {
-	__ModelMap.Store(make(_ModelMap))
+type modelMap struct {
+	modelMap atomic.Value
 }
 
-func getModelMap() _ModelMap {
-	return __ModelMap.Load().(_ModelMap)
+var ModelMap modelMap
+
+func (m *modelMap) getModelMap() map[int]*Model {
+	v := m.modelMap.Load()
+	if v == nil {
+		return nil
+	} else {
+		return v.(map[int]*Model)
+	}
 }
 
-func setModelMap(m _ModelMap) {
-	__ModelMap.Store(m)
+func (m *modelMap) setModelMap(v map[int]*Model) {
+	m.modelMap.Store(v)
 }
 
-func GetModel(id int) (*Model, bool) {
-	m, ok := getModelMap()[id]
-	return m, ok
+func (m *modelMap) Get(id int) (mo *Model, ok bool) {
+	if v := m.getModelMap(); v == nil {
+		return
+	} else {
+		mo, ok = v[id]
+		return
+	}
 }
 
-func loadModelFromBytes(s []byte) error {
-	m := make(_ModelMap)
-	err := json.Unmarshal(s, &m)
+func (m *modelMap) loadFromBytes(s []byte) error {
+	v := make(map[int]*Model)
+	err := json.Unmarshal(s, &v)
 	if err != nil {
 		return err
 	}
-	setModelMap(m)
+	m.setModelMap(v)
 	return nil
 }
 
-func LoadModelFromString(s string) error {
-	return loadModelFromBytes([]byte(s))
+func (m *modelMap) LoadFromString(s string) error {
+	return m.loadFromBytes([]byte(s))
 }
 
-func LoadModelFromFile(path string) error {
+func (m *modelMap) LoadFromFile(path string) error {
 	jsonFile, err := os.Open(path)
 	if err != nil {
 		return err
@@ -79,11 +86,11 @@ func LoadModelFromFile(path string) error {
 	if err != nil {
 		return err
 	}
-	return loadModelFromBytes(jsonData)
+	return m.loadFromBytes(jsonData)
 }
 
-func ForEachModel(fn func(m *Model) bool) {
-	for _, m := range getModelMap() {
+func (m *modelMap) ForEach(fn func(m *Model) bool) {
+	for _, m := range m.getModelMap() {
 		if !fn(m) {
 			break
 		}

@@ -12,10 +12,11 @@ import (
 )
 
 type goStruct struct {
-	TableName string
-	Data      string
-	Package   string
-	str       strings.Builder
+	TableName      string
+	TableNameLower string
+	Data           string
+	Package        string
+	str            strings.Builder
 }
 
 var goTemplate string = `
@@ -30,42 +31,49 @@ import(
 
 {{.Data}}
 
-type _{{.TableName}}Map map[int]*{{.TableName}}
-
-var __{{.TableName}}Map atomic.Value
-
-func init() {
-	__{{.TableName}}Map.Store(make(_{{.TableName}}Map))
+type {{.TableNameLower}}Map struct {
+	{{.TableNameLower}}Map atomic.Value
 }
 
-func get{{.TableName}}Map() _{{.TableName}}Map {
-	return __{{.TableName}}Map.Load().(_{{.TableName}}Map)
+var {{.TableName}}Map {{.TableNameLower}}Map
+
+func (m *{{.TableNameLower}}Map) get{{.TableName}}Map() map[int]*{{.TableName}} {
+	v := m.{{.TableNameLower}}Map.Load()
+	if v == nil {
+		return nil
+	} else {
+		return v.(map[int]*{{.TableName}})
+	}
 }
 
-func set{{.TableName}}Map(m _{{.TableName}}Map) {
-	__{{.TableName}}Map.Store(m)
+func (m *{{.TableNameLower}}Map) set{{.TableName}}Map(v map[int]*{{.TableName}}) {
+	m.{{.TableNameLower}}Map.Store(v)
 }
 
-func Get{{.TableName}}(id int) (*{{.TableName}}, bool) {
-	m, ok := get{{.TableName}}Map()[id]
-	return m, ok
+func (m *{{.TableNameLower}}Map) Get(id int) (mo *{{.TableName}}, ok bool) {
+	if v := m.get{{.TableName}}Map(); v == nil {
+		return
+	} else {
+		mo, ok = v[id]
+		return
+	}
 }
 
-func load{{.TableName}}FromBytes(s []byte) error {
-	m := make(_{{.TableName}}Map)
-	err := json.Unmarshal(s, &m)
+func (m *{{.TableNameLower}}Map) loadFromBytes(s []byte) error {
+	v := make(map[int]*{{.TableName}})
+	err := json.Unmarshal(s, &v)
 	if err != nil {
 		return err
 	}
-	set{{.TableName}}Map(m)
+	m.set{{.TableName}}Map(v)
 	return nil
 }
 
-func Load{{.TableName}}FromString(s string) error {
-	return load{{.TableName}}FromBytes([]byte(s))
+func (m *{{.TableNameLower}}Map) LoadFromString(s string) error {
+	return m.loadFromBytes([]byte(s))
 }
 
-func Load{{.TableName}}FromFile(path string) error {
+func (m *{{.TableNameLower}}Map) LoadFromFile(path string) error {
 	jsonFile, err := os.Open(path)
 	if err != nil {
 		return err
@@ -75,11 +83,11 @@ func Load{{.TableName}}FromFile(path string) error {
 	if err != nil {
 		return err
 	}
-	return load{{.TableName}}FromBytes(jsonData)
+	return m.loadFromBytes(jsonData)
 }
 
-func ForEach{{.TableName}}(fn func(m *{{.TableName}}) bool) {
-	for _, m := range get{{.TableName}}Map() {
+func (m *{{.TableNameLower}}Map) ForEach(fn func(m *{{.TableName}}) bool) {
+	for _, m := range m.get{{.TableName}}Map() {
 		if !fn(m) {
 			break
 		}
@@ -127,7 +135,8 @@ func (j *goStruct) walkOk(writePath string, tmpl *template.Template) {
 
 // processTable 处理表结构，生成 Go 类型定义
 func (j *goStruct) processTable(colNames []string, types []string, table *Table) {
-	j.TableName = table.name
+	j.TableName = strings.Title(table.name)
+	j.TableNameLower = strings.ToLower(table.name)
 	fields := []string{}
 	for i := 0; i < len(colNames); i++ {
 		if table.fields[i].parser != nil {
@@ -139,5 +148,5 @@ func (j *goStruct) processTable(colNames []string, types []string, table *Table)
 	if err != nil {
 		panic(err)
 	}
-	j.str.WriteString(p.GenGoDefine(strings.Title(table.name)))
+	j.str.WriteString(p.GenGoDefine(j.TableName))
 }
